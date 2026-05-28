@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Go compiler Phase 4 tree-walking interpreter implementation:
+  - `internal/interpreter` package: runtime values, lexical environments, control-flow signals, expression/statement evaluator, function calls, records, constructors, methods, loops, switches, interpolation, lists, dicts, and ranges
+  - Runtime built-in namespaces for `console`, `file`, `json`, and `system`, plus UI-related stub namespaces matching the checker
+  - Runtime constant groups for colors, dock, orientation, toast types, font weights, text alignment, scroll modes, and sort order
+  - Runtime diagnostic codes E100-E107 for undefined variables, type mismatches, indexing, division by zero, non-callable values, argument counts, dict key errors, and call depth
+  - `leal run <file.ll> [args...]` CLI command that lexes, parses, type-checks, then executes programs
+  - Interpreter tests covering console output, arithmetic, control flow, loops, functions, recursion, records, methods, interpolation, collections, builtins, runtime errors, and `examples/full.ll`
+
 - Go compiler Phase 3 type checker implementation:
   - `internal/checker` package: semantic analysis with type inference, name resolution, and type validation
   - `types.go`: internal type system (PrimitiveType, NullType, NullableType, RecordType, FuncSignature, GenericType, TupleType, NamespaceType, ComponentType, EnumType) with assignability rules
