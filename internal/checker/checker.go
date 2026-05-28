@@ -958,7 +958,7 @@ func (c *Checker) checkAssignStmt(a *ast.AssignStmt) {
 
 	targetType := c.checkExpr(a.Target)
 	valType := c.checkExpr(a.Value)
-	c.checkAssignment(valType, targetType, a.EqPos, a.Value.End().Col-a.Value.Pos().Col)
+	c.checkAssignment(valType, targetType, a.Value.Pos(), a.Value.End().Col-a.Value.Pos().Col)
 }
 
 // checkReturnStmt checks a return statement.
@@ -1022,9 +1022,9 @@ func (c *Checker) checkLoopStmt(l *ast.LoopStmt, returnType Type) {
 	c.scope = loopScope
 
 	for _, iter := range l.Iterators {
+		iterType := c.checkExpr(iter.Iterable)
 		if iter.Variable != "_" {
 			var varType Type
-			iterType := c.checkExpr(iter.Iterable)
 			if iterType == nil {
 				// Range expression — loop variable is int.
 				varType = IntType

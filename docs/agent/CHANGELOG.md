@@ -44,6 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Type checker: removed double type-checking of loop iterator iterables in `checkLoopStmt` (duplicate diagnostics)
 - Type checker: added specific E039 error for missing record methods instead of misleading E049 "cannot call non-function type"
 - Diagnostics: checker and parser errors now display source line excerpts (added `SetSource` fallback to `Diagnostics`)
+- Type checker: loop iterables now always type-checked even when using `_` variable (e.g., `for _ in some_func():`), with regression test
+- Type checker: assignment error span now correctly highlights the value expression instead of starting at the `=` sign, with regression test
 - Diagnostics: error highlighting now spans the full token (e.g., `~~~~` for `true`) instead of a single character
 - Parser: `errorAt` now computes highlight span from token lexeme length
 

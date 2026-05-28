@@ -798,3 +798,26 @@ func main():
 `)
 	requireNoErrors(t, diag)
 }
+
+// --- Regression: fix.md ---
+
+func TestLoopUnderscoreIterableTypeError(t *testing.T) {
+	// Bug: loop iterables were not type-checked when using _ variable.
+	diag := checkSource(t, `package app.main
+
+func main():
+    loop _ in undefined_func():
+        pass
+`)
+	requireErrorCode(t, diag, "E021")
+}
+
+func TestAssignmentTypeMismatchSpan(t *testing.T) {
+	// Bug: assignment error position pointed to = instead of the value expression.
+	diag := checkSource(t, `package app.main
+
+func main():
+    x: int = true
+`)
+	requireErrorCode(t, diag, "E022")
+}
