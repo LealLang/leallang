@@ -612,7 +612,8 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 			if method, ok := t.Methods[fn.Field]; ok {
 				sig = method
 			} else {
-				calleeType = baseType
+				c.error(fn.Dot, "E039", fmt.Sprintf("type %s has no method '%s'", t.Name, fn.Field), "")
+				return nil
 			}
 		case *ComponentType:
 			if prop, ok := t.Properties[fn.Field]; ok {
@@ -655,7 +656,6 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 	namedOrder := make([]string, 0)
 
 	for _, arg := range call.Args {
-		_ = c.checkExpr(arg.Value) // type-check all arg expressions
 		if arg.Name != "" {
 			if _, exists := named[arg.Name]; exists {
 				c.error(arg.Posn, "E028", fmt.Sprintf("duplicate named argument '%s'", arg.Name), "")
@@ -1015,11 +1015,6 @@ func (c *Checker) checkSwitchStmt(s *ast.SwitchStmt, returnType Type) {
 
 // checkLoopStmt checks a loop statement.
 func (c *Checker) checkLoopStmt(l *ast.LoopStmt, returnType Type) {
-	// Check iterators.
-	for _, iter := range l.Iterators {
-		c.checkExpr(iter.Iterable)
-	}
-
 	// Create loop scope with loop variables BEFORE checking modifiers
 	// (so loop variables are in scope for while/if conditions).
 	loopScope := NewScope(c.scope)

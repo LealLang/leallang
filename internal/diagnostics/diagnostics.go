@@ -53,7 +53,8 @@ type Diagnostic struct {
 
 // Diagnostics collects multiple diagnostic messages during compilation.
 type Diagnostics struct {
-	items []Diagnostic
+	items    []Diagnostic
+	srcLines []string // source lines for excerpt display fallback
 }
 
 // New creates a new Diagnostics collector.
@@ -83,6 +84,20 @@ func (d *Diagnostics) ReportWarning(code, msg string, pos token.Position, hint, 
 		Hint:       hint,
 		SourceLine: sourceLine,
 	})
+}
+
+// SetSource stores the source text for fallback line lookup in diagnostics.
+func (d *Diagnostics) SetSource(src string) {
+	d.srcLines = strings.Split(src, "\n")
+}
+
+// sourceLine returns the source line for the given 1-based line number.
+func (d *Diagnostics) sourceLine(line int) string {
+	idx := line - 1
+	if idx >= 0 && idx < len(d.srcLines) {
+		return d.srcLines[idx]
+	}
+	return ""
 }
 
 // HasErrors returns true if any error-level diagnostics have been collected.
@@ -140,22 +155,26 @@ func (d *Diagnostics) formatOne(b *strings.Builder, diag Diagnostic) {
 	//   |  (gray)
 	b.WriteString(sepPrefix + "\n")
 
-	if diag.SourceLine != "" {
+	sourceLine := diag.SourceLine
+	if sourceLine == "" {
+		sourceLine = d.sourceLine(diag.Pos.Line)
+	}
+	if sourceLine != "" {
 		// 12 |     label: `name`  (gray line num, source with red highlight)
 		col := diag.Pos.Col // 1-based
 		b.WriteString(colorGray + lineNumStr + " |" + colorReset + " ")
 
 		// Write source with the "guilty" character highlighted in red
-		if col >= 1 && col <= len(diag.SourceLine) {
-			before := diag.SourceLine[:col-1]
-			char := diag.SourceLine[col-1 : col]
+		if col >= 1 && col <= len(sourceLine) {
+			before := sourceLine[:col-1]
+			char := sourceLine[col-1 : col]
 			after := ""
-			if col < len(diag.SourceLine) {
-				after = diag.SourceLine[col:]
+			if col < len(sourceLine) {
+				after = sourceLine[col:]
 			}
 			b.WriteString(before + colorRed + string(char) + colorReset + after)
 		} else {
-			b.WriteString(diag.SourceLine)
+			b.WriteString(sourceLine)
 		}
 		b.WriteString("\n")
 

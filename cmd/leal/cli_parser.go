@@ -21,6 +21,7 @@ func runParse(filename string) {
 	}
 
 	diag := diagnostics.New()
+	diag.SetSource(string(src))
 	tokens := lexer.New(filename, string(src), diag).Tokenize()
 	program := parser.New(tokens, diag).Parse()
 

@@ -512,7 +512,7 @@ func main():
     p = Point(X: 10, Y: 20)
     p.FooBar()
 `)
-	requireErrorCode(t, diag, "E049")
+	requireErrorCode(t, diag, "E039")
 }
 
 func TestRecordFieldAccessError(t *testing.T) {

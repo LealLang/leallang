@@ -137,3 +137,19 @@ func TestFormatNoSourceLine(t *testing.T) {
 		t.Errorf("Format() missing hint:\n%s", out)
 	}
 }
+
+func TestFormatSourceLineFallback(t *testing.T) {
+	d := New()
+	d.SetSource("line one\nline two\nline three")
+	pos := token.Position{File: "test.ll", Line: 2, Col: 6}
+	d.ReportError("E022", "type mismatch", pos, "", "")
+
+	out := d.Format()
+	// Source line has ANSI codes around the highlighted char, so check parts around it.
+	if !strings.Contains(out, "line ") || !strings.Contains(out, "wo") {
+		t.Errorf("Format() missing fallback source line:\n%s", out)
+	}
+	if !strings.Contains(out, "type mismatch") {
+		t.Errorf("Format() missing error message in excerpt:\n%s", out)
+	}
+}

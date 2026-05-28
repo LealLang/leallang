@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased] - 28-05-2026
 
 ### Added
+
 - Go compiler Phase 3 type checker implementation:
   - `internal/checker` package: semantic analysis with type inference, name resolution, and type validation
   - `types.go`: internal type system (PrimitiveType, NullType, NullableType, RecordType, FuncSignature, GenericType, TupleType, NamespaceType, ComponentType, EnumType) with assignability rules
@@ -36,6 +37,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added GitHub Actions CI pipelines:
   - `build.yml`: build pipeline that runs first on every push and PR to main/release
   - `tests.yml`: unit test pipeline with each package (token, diagnostics, lexer, parser, AST) as a separate step, runs after build passes
+
+### Fixed
+
+- Type checker: removed double type-checking of call arguments in `checkCallArgs` (duplicate diagnostics)
+- Type checker: removed double type-checking of loop iterator iterables in `checkLoopStmt` (duplicate diagnostics)
+- Type checker: added specific E039 error for missing record methods instead of misleading E049 "cannot call non-function type"
+- Diagnostics: checker and parser errors now display source line excerpts (added `SetSource` fallback to `Diagnostics`)
 
 ## [0] - 27-05-2006
 
