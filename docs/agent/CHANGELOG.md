@@ -6,7 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] - 28-05-2026
 
+### Fixed
+
+- Constant reassignment now produces a runtime error (E101) instead of silently shadowing the binding (`internal/interpreter/env.go`, `internal/interpreter/interpreter.go`)
+- Exclusive range with equal bounds (e.g. `0..<0`) now correctly produces an empty sequence instead of `[0, -1]` (`internal/interpreter/interpreter.go`)
+
 ### Added
+
+- Go compiler Phase 4 tree-walking interpreter implementation:
+  - `internal/interpreter` package: runtime values, lexical environments, control-flow signals, expression/statement evaluator, function calls, records, constructors, methods, loops, switches, interpolation, lists, dicts, and ranges
+  - Runtime built-in namespaces for `console`, `file`, `json`, and `system`, plus UI-related stub namespaces matching the checker
+  - Runtime constant groups for colors, dock, orientation, toast types, font weights, text alignment, scroll modes, and sort order
+  - Runtime diagnostic codes E100-E107 for undefined variables, type mismatches, indexing, division by zero, non-callable values, argument counts, dict key errors, and call depth
+  - `leal run <file.ll> [args...]` CLI command that lexes, parses, type-checks, then executes programs
+  - Interpreter tests covering console output, arithmetic, control flow, loops, functions, recursion, records, methods, interpolation, collections, builtins, runtime errors, and `examples/full.ll`
 
 - Go compiler Phase 3 type checker implementation:
   - `internal/checker` package: semantic analysis with type inference, name resolution, and type validation
