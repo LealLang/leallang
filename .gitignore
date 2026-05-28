@@ -1,6 +1,8 @@
 # AI Stuff
 .claude/
 .openclaude/
+CLAUDE.md
+AGENTS.md
 
 # Go
 *.exe
