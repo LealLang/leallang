@@ -15,9 +15,9 @@ LealLang is a typed, declarative programming language for building desktop GUI a
                     ↓
             ✅ diagnostics
                     ↓
-            ✅ type checker (We are here!)
+            ✅ type checker
                     ↓
-               interpreter (Planning...)
+             ✅ interpreter (We are here!)
                     ↓
                  stdlib
                     ↓
