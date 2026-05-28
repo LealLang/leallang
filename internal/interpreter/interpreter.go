@@ -645,7 +645,11 @@ func (interp *Interpreter) evalAssign(stmt *ast.AssignStmt, env *Env) error {
 	}
 	switch target := stmt.Target.(type) {
 	case *ast.Ident:
-		if env.Assign(target.Name, val) {
+		found, isConst := env.Assign(target.Name, val)
+		if isConst {
+			return interp.runtimeError("E101", target.NamePos, 0, fmt.Sprintf("cannot reassign const '%s'", target.Name), "")
+		}
+		if found {
 			return nil
 		}
 		env.Set(target.Name, val)
@@ -869,6 +873,9 @@ func (interp *Interpreter) buildIterators(stmt *ast.LoopStmt, env *Env) ([]loopI
 func (interp *Interpreter) iterableValues(val Value, pos token.Position) ([]Value, error) {
 	switch v := val.(type) {
 	case *RangeVal:
+		if v.Exclusive && v.Low == v.High {
+			return nil, nil
+		}
 		var out []Value
 		end := v.High
 		if v.Exclusive && v.Low <= v.High {

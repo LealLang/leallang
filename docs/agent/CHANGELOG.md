@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] - 28-05-2026
 
+### Fixed
+
+- Constant reassignment now produces a runtime error (E101) instead of silently shadowing the binding (`internal/interpreter/env.go`, `internal/interpreter/interpreter.go`)
+- Exclusive range with equal bounds (e.g. `0..<0`) now correctly produces an empty sequence instead of `[0, -1]` (`internal/interpreter/interpreter.go`)
+
 ### Added
 
 - Go compiler Phase 4 tree-walking interpreter implementation:

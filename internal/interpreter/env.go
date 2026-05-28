@@ -30,13 +30,16 @@ func (e *Env) setCell(name string, c *cell) {
 	e.vars[name] = c
 }
 
-func (e *Env) Assign(name string, val Value) bool {
+func (e *Env) Assign(name string, val Value) (found bool, isConst bool) {
 	c, ok := e.lookupCell(name)
-	if !ok || c.constBind {
-		return false
+	if !ok {
+		return false, false
+	}
+	if c.constBind {
+		return true, true
 	}
 	c.value = val
-	return true
+	return true, false
 }
 
 func (e *Env) Get(name string) (Value, bool) {
