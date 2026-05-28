@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Parser: E012 (unterminated interpolation brace), E013 (const missing value), E014 (invalid assignment target), E015 (else without if), E016 (continue outside loop), E017 (duplicate while/if modifiers), E018 (empty switch), E019 (package not first), E020 (multiple packages)
 - Added `internal/diagnostics/diagnostics_test.go` covering Severity.String, ReportError/ReportWarning, All/Errors/HasErrors, and Format output
 - Added `internal/token/token_test.go` covering LookupKeyword, TokenKind.String, and Token.String
+- Added GitHub Actions CI pipelines:
+  - `build.yml`: build pipeline that runs first on every push and PR to main/release
+  - `tests.yml`: unit test pipeline with each package (token, diagnostics, lexer, parser, AST) as a separate step, runs after build passes
 
 ## [0] - 27-05-2006
 
