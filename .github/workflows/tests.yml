@@ -102,3 +102,19 @@ jobs:
 
       - name: Run AST tests
         run: go test -v -cover ./internal/ast/
+
+  test-checker:
+    name: Test Checker
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run checker tests
+        run: go test -v -cover ./internal/checker/

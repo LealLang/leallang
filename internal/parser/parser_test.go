@@ -155,11 +155,11 @@ pub func greet(ref name: string, age: int) -> string:
 		t.Fatalf("decl count = %d", len(program.Decls))
 	}
 	empty := program.Decls[0].(*ast.FuncDecl)
-	if empty.Name != "empty" || len(empty.Params) != 0 || empty.ReturnType != nil {
+	if empty.Name != "empty" || len(empty.Params) != 0 || len(empty.ReturnTypes) != 0 {
 		t.Fatalf("bad empty func: %#v", empty)
 	}
 	greet := program.Decls[1].(*ast.FuncDecl)
-	if !greet.Pub || greet.Name != "greet" || len(greet.Params) != 2 || greet.ReturnType == nil {
+	if !greet.Pub || greet.Name != "greet" || len(greet.Params) != 2 || len(greet.ReturnTypes) == 0 {
 		t.Fatalf("bad greet func: %#v", greet)
 	}
 	if !greet.Params[0].Ref {

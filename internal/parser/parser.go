@@ -192,7 +192,10 @@ func (p *Parser) parseFuncDecl(pub bool) *ast.FuncDecl {
 	}
 	p.expect(token.RPAREN, "')' after parameters")
 	if p.match(token.ARROW) {
-		fn.ReturnType = p.parseType(true)
+		fn.ReturnTypes = append(fn.ReturnTypes, p.parseType(true))
+		for p.match(token.COMMA) {
+			fn.ReturnTypes = append(fn.ReturnTypes, p.parseType(true))
+		}
 	}
 	fn.Body = p.parseBlock()
 	return fn
@@ -232,11 +235,8 @@ func (p *Parser) parseTypeDecl() *ast.TypeDecl {
 			decl.Constructor = p.parseConstructorDecl()
 			continue
 		}
-		if pub {
-			// Field visibility is parsed but not represented by the requested AST shape.
-		}
 		if p.check(token.IDENT) {
-			decl.Fields = append(decl.Fields, p.parseFieldDecl())
+			decl.Fields = append(decl.Fields, p.parseFieldDecl(pub))
 			continue
 		}
 		p.errorAt(p.peek(), "E013", fmt.Sprintf("expected type member, got %s", p.peek().Kind), "use a field, constructor, or method")
@@ -246,9 +246,9 @@ func (p *Parser) parseTypeDecl() *ast.TypeDecl {
 	return decl
 }
 
-func (p *Parser) parseFieldDecl() *ast.FieldDecl {
+func (p *Parser) parseFieldDecl(pub bool) *ast.FieldDecl {
 	name := p.expect(token.IDENT, "field name")
-	field := &ast.FieldDecl{FieldPos: name.Pos, Name: name.Lexeme}
+	field := &ast.FieldDecl{FieldPos: name.Pos, Pub: pub, Name: name.Lexeme}
 	p.expect(token.COLON, "':' after field name")
 	field.Type = p.parseType(true)
 	if p.match(token.EQ) {
