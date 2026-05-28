@@ -147,7 +147,7 @@ func (l *Lexer) NextToken() token.Token {
 			return l.makeToken(token.BANG_EQ, "!=", start)
 		}
 		l.diag.ReportError("E001", "unexpected character '!'",
-			l.posAt(start), "", l.currentLine())
+			l.posAt(start), 0, "", l.currentLine())
 		return l.makeToken(token.ILLEGAL, "!", start)
 
 	case '<':
@@ -190,7 +190,7 @@ func (l *Lexer) NextToken() token.Token {
 			return l.scanInterpString(start)
 		}
 		l.diag.ReportError("E001", "unexpected character '$'",
-			l.posAt(start), "", l.currentLine())
+			l.posAt(start), 0, "", l.currentLine())
 		return l.makeToken(token.ILLEGAL, "$", start)
 
 	default:
@@ -204,7 +204,7 @@ func (l *Lexer) NextToken() token.Token {
 			return l.scanNumber(start)
 		}
 		l.diag.ReportError("E001", fmt.Sprintf("unexpected character '%c'", ch),
-			l.posAt(start), "", l.currentLine())
+			l.posAt(start), 0, "", l.currentLine())
 		return l.makeToken(token.ILLEGAL, string(ch), start)
 	}
 }
@@ -249,7 +249,7 @@ func (l *Lexer) handleLineStart() token.Token {
 		// Check for tab indentation
 		if l.peek() == '\t' {
 			l.diag.ReportError("E006", "tab used for indentation; spaces required",
-				l.posAt(l.pos), "use 4 spaces per indentation level", l.currentLine())
+				l.posAt(l.pos), 0, "use 4 spaces per indentation level", l.currentLine())
 			l.advance()
 			return l.makeToken(token.ILLEGAL, "\t", start)
 		}
@@ -258,7 +258,7 @@ func (l *Lexer) handleLineStart() token.Token {
 		if spaces%indentUnit != 0 {
 			l.diag.ReportError("E007",
 				fmt.Sprintf("indentation is %d spaces, not a multiple of %d", spaces, indentUnit),
-				l.posAt(l.pos-spaces), "use 4 spaces per indentation level", l.currentLine())
+				l.posAt(l.pos-spaces), 0, "use 4 spaces per indentation level", l.currentLine())
 		}
 
 		current := l.indentStack[len(l.indentStack)-1]
@@ -278,7 +278,7 @@ func (l *Lexer) handleLineStart() token.Token {
 			}
 			if l.indentStack[len(l.indentStack)-1] != spaces {
 				l.diag.ReportError("E008", "indentation does not match any outer level",
-					l.posAt(l.pos-spaces), "", l.currentLine())
+					l.posAt(l.pos-spaces), 0, "", l.currentLine())
 			}
 			if count > 0 {
 				l.pendingDedents = count - 1
@@ -327,7 +327,7 @@ func (l *Lexer) scanString(start int) token.Token {
 	for !l.atEnd() && l.peek() != '"' {
 		if l.peek() == '\n' {
 			l.diag.ReportError("E002", "unterminated string literal",
-				l.posAt(start), "add a closing \" before the end of the line", l.currentLine())
+				l.posAt(start), 0, "add a closing \" before the end of the line", l.currentLine())
 			return l.makeToken(token.STRING_LIT, l.src[start:l.pos], start)
 		}
 		if l.peek() == '\\' {
@@ -336,7 +336,7 @@ func (l *Lexer) scanString(start int) token.Token {
 				esc := l.peek()
 				if esc != '"' && esc != '\\' && esc != 'n' && esc != 't' && esc != 'r' && esc != '0' && esc != '\'' {
 					l.diag.ReportError("E005", fmt.Sprintf("invalid escape sequence '\\%c'", esc),
-						l.posAt(l.pos-1), "", l.currentLine())
+						l.posAt(l.pos-1), 0, "", l.currentLine())
 				}
 				l.advance()
 			}
@@ -347,7 +347,7 @@ func (l *Lexer) scanString(start int) token.Token {
 
 	if l.atEnd() {
 		l.diag.ReportError("E002", "unterminated string literal",
-			l.posAt(start), "add a closing \" to end the string", l.currentLine())
+			l.posAt(start), 0, "add a closing \" to end the string", l.currentLine())
 		return l.makeToken(token.STRING_LIT, l.src[start:l.pos], start)
 	}
 
@@ -362,7 +362,7 @@ func (l *Lexer) scanInterpString(start int) token.Token {
 		ch := l.peek()
 		if ch == '\n' {
 			l.diag.ReportError("E002", "unterminated interpolated string literal",
-				l.posAt(start), "add a closing \" before the end of the line", l.currentLine())
+				l.posAt(start), 0, "add a closing \" before the end of the line", l.currentLine())
 			return l.makeToken(token.INTERP_STRING_LIT, l.src[start:l.pos], start)
 		}
 		if ch == '{' {
@@ -387,7 +387,7 @@ func (l *Lexer) scanInterpString(start int) token.Token {
 	}
 
 	l.diag.ReportError("E002", "unterminated interpolated string literal",
-		l.posAt(start), "add a closing \" to end the string", l.currentLine())
+		l.posAt(start), 0, "add a closing \" to end the string", l.currentLine())
 	return l.makeToken(token.INTERP_STRING_LIT, l.src[start:l.pos], start)
 }
 
@@ -395,7 +395,7 @@ func (l *Lexer) scanInterpString(start int) token.Token {
 func (l *Lexer) scanChar(start int) token.Token {
 	if l.atEnd() || l.peek() == '\n' {
 		l.diag.ReportError("E009", "empty char literal",
-			l.posAt(start), "char literals must contain exactly one character", l.currentLine())
+			l.posAt(start), 0, "char literals must contain exactly one character", l.currentLine())
 		return l.makeToken(token.CHAR_LIT, l.src[start:l.pos], start)
 	}
 
@@ -406,7 +406,7 @@ func (l *Lexer) scanChar(start int) token.Token {
 			esc := l.peek()
 			if esc != 'n' && esc != '\\' && esc != '\'' && esc != 't' && esc != 'r' && esc != '0' {
 				l.diag.ReportError("E005", fmt.Sprintf("invalid escape sequence '\\%c'", esc),
-					l.posAt(l.pos-1), "", l.currentLine())
+					l.posAt(l.pos-1), 0, "", l.currentLine())
 			}
 			l.advance()
 		}
@@ -418,7 +418,7 @@ func (l *Lexer) scanChar(start int) token.Token {
 	if l.atEnd() || l.peek() != '\'' {
 		if l.atEnd() || l.peek() == '\n' {
 			l.diag.ReportError("E003", "unterminated char literal",
-				l.posAt(start), "add a closing ' to end the char literal", l.currentLine())
+				l.posAt(start), 0, "add a closing ' to end the char literal", l.currentLine())
 		} else {
 			// Multiple characters
 			for !l.atEnd() && l.peek() != '\'' && l.peek() != '\n' {
@@ -428,7 +428,7 @@ func (l *Lexer) scanChar(start int) token.Token {
 				l.advance()
 			}
 			l.diag.ReportError("E010", "char literal contains more than one character",
-				l.posAt(start), "char literals must contain exactly one character", l.currentLine())
+				l.posAt(start), 0, "char literals must contain exactly one character", l.currentLine())
 		}
 		return l.makeToken(token.CHAR_LIT, l.src[start:l.pos], start)
 	}
@@ -458,7 +458,7 @@ func (l *Lexer) scanBlockComment() {
 		}
 	}
 	l.diag.ReportError("E004", "unterminated multi-line comment",
-		l.posAt(l.pos), "add a closing */ to end the comment", l.currentLine())
+		l.posAt(l.pos), 0, "add a closing */ to end the comment", l.currentLine())
 }
 
 // skipLineComment advances past a line comment (started by #) to end of line.
