@@ -4,54 +4,33 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
-
-	"github.com/LealLang/leallang/internal/ast"
-	"github.com/LealLang/leallang/internal/diagnostics"
-	"github.com/LealLang/leallang/internal/lexer"
-	"github.com/LealLang/leallang/internal/parser"
 )
 
 func main() {
-	showTokens := flag.Bool("tokens", false, "print token stream instead of AST")
-	flag.Parse()
-
-	if flag.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "usage: leal [--tokens] <file.ll>\n")
+	if len(os.Args) < 3 {
+		fmt.Fprintf(os.Stderr, "usage: leal <command> <file.ll>\n\n")
+		fmt.Fprintf(os.Stderr, "commands:\n")
+		fmt.Fprintf(os.Stderr, "  tokenize   print the token stream\n")
+		fmt.Fprintf(os.Stderr, "  parse      print the AST\n")
+		fmt.Fprintf(os.Stderr, "  check      run the type checker\n")
 		os.Exit(1)
 	}
 
-	filename := flag.Arg(0)
-	src, err := os.ReadFile(filename)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	command := os.Args[1]
+	filename := os.Args[2]
+
+	switch command {
+	case "tokenize":
+		runTokenize(filename)
+	case "parse":
+		runParse(filename)
+	case "check":
+		runCheck(filename)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
+		fmt.Fprintf(os.Stderr, "available commands: tokenize, parse, check\n")
 		os.Exit(1)
 	}
-
-	diag := diagnostics.New()
-	l := lexer.New(filename, string(src), diag)
-	tokens := l.Tokenize()
-
-	if *showTokens {
-		for _, tok := range tokens {
-			fmt.Println(tok.String())
-		}
-		if diag.HasErrors() {
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, diag.Format())
-			os.Exit(1)
-		}
-		return
-	}
-
-	program := parser.New(tokens, diag).Parse()
-
-	if diag.HasErrors() {
-		fmt.Fprintln(os.Stderr, diag.Format())
-		os.Exit(1)
-	}
-
-	ast.Print(os.Stdout, program)
 }

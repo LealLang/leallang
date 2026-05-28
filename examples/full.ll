@@ -15,8 +15,10 @@ type Point:
 
 func main():
     p = Point(x: 10, y: 20)
+    
     result: string = switch p.X:
         10 -> "ten"
         _  -> "other"
+
     loop i in 0..MAX, step 2, while i < 50:
         console.print_ln($"i is {i}")

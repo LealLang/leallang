@@ -67,10 +67,12 @@ func (p *printer) node(node Node, indent int) {
 		for _, param := range n.Params {
 			p.line(indent+1, "Param name=%s type=%s ref=%t", param.Name, typeString(param.Type), param.Ref)
 		}
-		if n.ReturnType == nil {
-			p.line(indent+1, "ReturnType: <none>")
+		if len(n.ReturnTypes) == 0 {
+			p.line(indent+1, "ReturnTypes: <none>")
 		} else {
-			p.line(indent+1, "ReturnType: %s", typeString(n.ReturnType))
+			for i, rt := range n.ReturnTypes {
+				p.line(indent+1, "ReturnType[%d]: %s", i, typeString(rt))
+			}
 		}
 		p.line(indent+1, "Body:")
 		for _, stmt := range n.Body {
@@ -92,7 +94,7 @@ func (p *printer) node(node Node, indent int) {
 			p.node(method, indent+1)
 		}
 	case *FieldDecl:
-		p.line(indent, "FieldDecl name=%s type=%s", n.Name, typeString(n.Type))
+		p.line(indent, "FieldDecl name=%s pub=%t type=%s", n.Name, n.Pub, typeString(n.Type))
 		if n.Default != nil {
 			p.line(indent+1, "Default:")
 			p.node(n.Default, indent+2)

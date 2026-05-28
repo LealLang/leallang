@@ -74,12 +74,12 @@ type ConstDecl struct {
 
 // FuncDecl represents a function or method declaration.
 type FuncDecl struct {
-	FuncPos    token.Position
-	Pub        bool
-	Name       string
-	Params     []*Param
-	ReturnType TypeExpr
-	Body       []Stmt
+	FuncPos     token.Position
+	Pub         bool
+	Name        string
+	Params      []*Param
+	ReturnTypes []TypeExpr
+	Body        []Stmt
 }
 
 // Param represents a function or constructor parameter.
@@ -114,6 +114,7 @@ type TypeDecl struct {
 // FieldDecl represents a field inside a type declaration.
 type FieldDecl struct {
 	FieldPos token.Position
+	Pub      bool
 	Name     string
 	Type     TypeExpr
 	Default  Expr
@@ -455,8 +456,8 @@ func (f *FuncDecl) End() token.Position {
 	if len(f.Body) > 0 {
 		return f.Body[len(f.Body)-1].End()
 	}
-	if f.ReturnType != nil {
-		return f.ReturnType.End()
+	if len(f.ReturnTypes) > 0 {
+		return f.ReturnTypes[len(f.ReturnTypes)-1].End()
 	}
 	return endOfName(f.FuncPos, "func "+f.Name)
 }

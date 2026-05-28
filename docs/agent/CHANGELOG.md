@@ -7,6 +7,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased] - 28-05-2026
 
 ### Added
+- Go compiler Phase 3 type checker implementation:
+  - `internal/checker` package: semantic analysis with type inference, name resolution, and type validation
+  - `types.go`: internal type system (PrimitiveType, NullType, NullableType, RecordType, FuncSignature, GenericType, TupleType, NamespaceType, ComponentType, EnumType) with assignability rules
+  - `scope.go`: scope chain with symbol table (Define, Lookup, LookupLocal) supporting nested scopes
+  - `builtins.go`: pre-registered built-in types (string, int, float, bool, char, any, Error), event types (ClickEvent, ResizeEvent, etc.), enum-like types (Color, Dock, Orientation, ToastType), 10 namespaces (console, file, window, msg, json, modal, toast, system, clipboard, screen), 8 constant groups, and 37 component types (Window, Button, Label, Panel, TextInput, etc.)
+  - `checker.go`: two-pass analysis — Pass 1 collects top-level declarations, Pass 2 checks bodies; supports var/const declarations, function declarations, type declarations with constructors and methods
+  - `check_expr.go` (inline): expression type inference for literals, identifiers, binary/unary operators, function calls (with positional + named args, ref param validation), field access, indexing, list/dict literals, ranges, interpolated strings, switch expressions, component refs
+  - `check_stmt.go` (inline): statement checking for assignments (with implicit variable declarations), return statements, if/else (with bool condition validation), switch, loops (with range/List/Dict iteration, step/while/if modifiers)
+  - Type checker diagnostic codes E021-E051 covering: undefined names, type mismatches, null safety, operator errors, call validation, record construction, immutability, ref params, visibility, return types, control flow, component validation
+  - 55 unit tests covering all checker functionality
+  - Default constructor generation for records without explicit constructors
+- AST changes for type checker support:
+  - Added `Pub bool` field to `ast.FieldDecl` (was parsed but discarded)
+  - Changed `ast.FuncDecl.ReturnType` to `ReturnTypes []TypeExpr` for multi-return type support
+  - Updated parser to pass field visibility through to AST
+  - Updated parser to parse comma-separated return types
+  - Updated AST pretty-printer for new ReturnTypes and FieldDecl.Pub
+
 - Updated `cmd/leal` CLI to parse `.ll` files using the AST parser by default
 - Added `--tokens` flag to `cmd/leal` for raw token output
 - Added `examples/full.ll` with types, constructors, switch expressions, loops, and interpolated strings
