@@ -44,7 +44,7 @@ func TestDiagnosticsEmpty(t *testing.T) {
 func TestDiagnosticsReportError(t *testing.T) {
 	d := New()
 	pos := token.Position{File: "test.ll", Line: 1, Col: 1}
-	d.ReportError("E001", "unexpected character", pos, "remove it", "x ~ y")
+	d.ReportError("E001", "unexpected character", pos, 0, "remove it", "x ~ y")
 
 	if !d.HasErrors() {
 		t.Fatal("should have errors")
@@ -64,7 +64,7 @@ func TestDiagnosticsReportError(t *testing.T) {
 func TestDiagnosticsReportWarning(t *testing.T) {
 	d := New()
 	pos := token.Position{File: "test.ll", Line: 1, Col: 1}
-	d.ReportWarning("W001", "unused variable", pos, "remove it", "x = 1")
+	d.ReportWarning("W001", "unused variable", pos, 0, "remove it", "x = 1")
 
 	if d.HasErrors() {
 		t.Fatal("warnings should not count as errors")
@@ -81,8 +81,8 @@ func TestDiagnosticsReportWarning(t *testing.T) {
 func TestDiagnosticsMixed(t *testing.T) {
 	d := New()
 	pos := token.Position{File: "test.ll", Line: 1, Col: 1}
-	d.ReportWarning("W001", "unused variable", pos, "", "x = 1")
-	d.ReportError("E001", "unexpected character", pos, "", "x ~ y")
+	d.ReportWarning("W001", "unused variable", pos, 0, "", "x = 1")
+	d.ReportError("E001", "unexpected character", pos, 0, "", "x ~ y")
 
 	if !d.HasErrors() {
 		t.Fatal("should have errors")
@@ -98,7 +98,7 @@ func TestDiagnosticsMixed(t *testing.T) {
 func TestFormatContainsSeverityAndCode(t *testing.T) {
 	d := New()
 	pos := token.Position{File: "test.ll", Line: 5, Col: 3}
-	d.ReportError("E001", "unexpected character '~'", pos, "remove it", "x ~ y")
+	d.ReportError("E001", "unexpected character '~'", pos, 0, "remove it", "x ~ y")
 
 	out := d.Format()
 	for _, want := range []string{"error[E001]", "unexpected character", "test.ll:5:3", "hint: remove it"} {
@@ -111,7 +111,7 @@ func TestFormatContainsSeverityAndCode(t *testing.T) {
 func TestFormatContainsSourceExcerpt(t *testing.T) {
 	d := New()
 	pos := token.Position{File: "test.ll", Line: 1, Col: 3}
-	d.ReportError("E001", "unexpected character", pos, "", "x ~ y")
+	d.ReportError("E001", "unexpected character", pos, 0, "", "x ~ y")
 
 	out := d.Format()
 	// The source excerpt contains ANSI color codes around the highlighted character,
@@ -127,7 +127,7 @@ func TestFormatContainsSourceExcerpt(t *testing.T) {
 func TestFormatNoSourceLine(t *testing.T) {
 	d := New()
 	pos := token.Position{File: "test.ll", Line: 1, Col: 1}
-	d.ReportError("E004", "unterminated comment", pos, "add */", "")
+	d.ReportError("E004", "unterminated comment", pos, 0, "add */", "")
 
 	out := d.Format()
 	if !strings.Contains(out, "error[E004]") {
@@ -142,7 +142,7 @@ func TestFormatSourceLineFallback(t *testing.T) {
 	d := New()
 	d.SetSource("line one\nline two\nline three")
 	pos := token.Position{File: "test.ll", Line: 2, Col: 6}
-	d.ReportError("E022", "type mismatch", pos, "", "")
+	d.ReportError("E022", "type mismatch", pos, 0, "", "")
 
 	out := d.Format()
 	// Source line has ANSI codes around the highlighted char, so check parts around it.
@@ -151,5 +151,19 @@ func TestFormatSourceLineFallback(t *testing.T) {
 	}
 	if !strings.Contains(out, "type mismatch") {
 		t.Errorf("Format() missing error message in excerpt:\n%s", out)
+	}
+}
+
+func TestFormatSpanHighlight(t *testing.T) {
+	d := New()
+	pos := token.Position{File: "test.ll", Line: 1, Col: 5}
+	d.ReportError("E022", "type mismatch", pos, 4, "", "x = true + 1")
+
+	out := d.Format()
+	if !strings.Contains(out, "~~~~") {
+		t.Errorf("Format() missing span tildes:\n%s", out)
+	}
+	if !strings.Contains(out, "type mismatch") {
+		t.Errorf("Format() missing error message:\n%s", out)
 	}
 }

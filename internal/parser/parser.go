@@ -955,7 +955,11 @@ func (p *Parser) expect(kind token.TokenKind, what string) token.Token {
 }
 
 func (p *Parser) errorAt(tok token.Token, code, msg, hint string) {
-	p.diagnostics.ReportError(code, msg, tok.Pos, hint, "")
+	span := len(tok.Lexeme)
+	if span < 1 {
+		span = 1
+	}
+	p.diagnostics.ReportError(code, msg, tok.Pos, span, hint, "")
 }
 
 func (p *Parser) match(kinds ...token.TokenKind) bool {

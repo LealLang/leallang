@@ -143,7 +143,7 @@ func (c *Checker) collectTypeDecl(d *ast.TypeDecl) {
 		Pub:  true, // types are always pub for now
 	}
 	if dup := c.global.Define(sym); dup != "" {
-		c.error(d.TypePos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+		c.error(d.TypePos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 	}
 }
 
@@ -158,7 +158,7 @@ func (c *Checker) collectFuncDecl(d *ast.FuncDecl) {
 		Pub:  d.Pub,
 	}
 	if dup := c.global.Define(sym); dup != "" {
-		c.error(d.FuncPos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+		c.error(d.FuncPos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 	}
 }
 
@@ -172,7 +172,7 @@ func (c *Checker) collectVarDecl(d *ast.VarDecl) {
 		Pos:  d.NamePos,
 	}
 	if dup := c.global.Define(sym); dup != "" {
-		c.error(d.NamePos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+		c.error(d.NamePos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 	}
 }
 
@@ -186,7 +186,7 @@ func (c *Checker) collectConstDecl(d *ast.ConstDecl) {
 		Pos:  d.ConstPos,
 	}
 	if dup := c.global.Define(sym); dup != "" {
-		c.error(d.ConstPos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+		c.error(d.ConstPos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 	}
 }
 
@@ -241,14 +241,14 @@ func (c *Checker) checkVarDecl(d *ast.VarDecl) {
 			Pos:  d.NamePos,
 		}
 		if dup := c.scope.Define(sym); dup != "" {
-			c.error(d.NamePos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+			c.error(d.NamePos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 			return
 		}
 	}
 
 	if d.Value != nil {
 		valType := c.checkExpr(d.Value)
-		c.checkAssignment(valType, sym.Type, d.Value.Pos())
+		c.checkAssignment(valType, sym.Type, d.Value.Pos(), d.Value.End().Col-d.Value.Pos().Col)
 		if sym.Type == nil && valType != nil {
 			sym.Type = valType
 		}
@@ -269,14 +269,14 @@ func (c *Checker) checkConstDecl(d *ast.ConstDecl) {
 			Pos:  d.ConstPos,
 		}
 		if dup := c.scope.Define(sym); dup != "" {
-			c.error(d.ConstPos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+			c.error(d.ConstPos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 			return
 		}
 	}
 
 	if d.Value != nil {
 		valType := c.checkExpr(d.Value)
-		c.checkAssignment(valType, sym.Type, d.Value.Pos())
+		c.checkAssignment(valType, sym.Type, d.Value.Pos(), d.Value.End().Col-d.Value.Pos().Col)
 		if sym.Type == nil && valType != nil {
 			sym.Type = valType
 		}
@@ -507,7 +507,7 @@ func (c *Checker) checkIdent(id *ast.Ident) Type {
 	}
 	sym := c.scope.Lookup(id.Name)
 	if sym == nil {
-		c.error(id.NamePos, "E021", fmt.Sprintf("undefined name '%s'", id.Name), "declare the name before using it")
+		c.error(id.NamePos, 0, "E021", fmt.Sprintf("undefined name '%s'", id.Name), "declare the name before using it")
 		return nil
 	}
 	return sym.Type
@@ -527,13 +527,13 @@ func (c *Checker) checkBinaryExpr(b *ast.BinaryExpr) Type {
 		if isNumeric(left) && isNumeric(right) {
 			return numericResult(left, right)
 		}
-		c.error(b.OpPos, "E025", fmt.Sprintf("operator + not defined on %s and %s", FormatType(left), FormatType(right)), "")
+		c.error(b.OpPos, 0, "E025", fmt.Sprintf("operator + not defined on %s and %s", FormatType(left), FormatType(right)), "")
 		return nil
 	case token.MINUS, token.STAR, token.SLASH, token.PERCENT:
 		if isNumeric(left) && isNumeric(right) {
 			return numericResult(left, right)
 		}
-		c.error(b.OpPos, "E025", fmt.Sprintf("operator %s not defined on %s and %s", b.Op, FormatType(left), FormatType(right)), "")
+		c.error(b.OpPos, 0, "E025", fmt.Sprintf("operator %s not defined on %s and %s", b.Op, FormatType(left), FormatType(right)), "")
 		return nil
 	case token.EQ_EQ, token.BANG_EQ:
 		return BoolType
@@ -541,13 +541,13 @@ func (c *Checker) checkBinaryExpr(b *ast.BinaryExpr) Type {
 		if isNumeric(left) && isNumeric(right) {
 			return BoolType
 		}
-		c.error(b.OpPos, "E053", fmt.Sprintf("comparison operator %s not defined between %s and %s", b.Op, FormatType(left), FormatType(right)), "")
+		c.error(b.OpPos, 0, "E053", fmt.Sprintf("comparison operator %s not defined between %s and %s", b.Op, FormatType(left), FormatType(right)), "")
 		return BoolType
 	case token.AND, token.OR:
 		if isBool(left) && isBool(right) {
 			return BoolType
 		}
-		c.error(b.OpPos, "E054", fmt.Sprintf("logical operator %s requires bool operands, got %s and %s", b.Op, FormatType(left), FormatType(right)), "")
+		c.error(b.OpPos, 0, "E054", fmt.Sprintf("logical operator %s requires bool operands, got %s and %s", b.Op, FormatType(left), FormatType(right)), "")
 		return BoolType
 	default:
 		return nil
@@ -562,13 +562,13 @@ func (c *Checker) checkUnaryExpr(u *ast.UnaryExpr) Type {
 		if isNumeric(operand) {
 			return operand
 		}
-		c.error(u.OpPos, "E055", fmt.Sprintf("unary - not defined on %s", FormatType(operand)), "")
+		c.error(u.OpPos, 0, "E055", fmt.Sprintf("unary - not defined on %s", FormatType(operand)), "")
 		return nil
 	case token.NOT:
 		if isBool(operand) {
 			return BoolType
 		}
-		c.error(u.OpPos, "E055", fmt.Sprintf("unary not requires bool, got %s", FormatType(operand)), "")
+		c.error(u.OpPos, 0, "E055", fmt.Sprintf("unary not requires bool, got %s", FormatType(operand)), "")
 		return nil
 	default:
 		return nil
@@ -587,7 +587,7 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 	case *ast.Ident:
 		sym := c.scope.Lookup(fn.Name)
 		if sym == nil {
-			c.error(fn.NamePos, "E021", fmt.Sprintf("undefined name '%s'", fn.Name), "")
+			c.error(fn.NamePos, 0, "E021", fmt.Sprintf("undefined name '%s'", fn.Name), "")
 			return nil
 		}
 		calleeType = sym.Type
@@ -605,14 +605,14 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 			if member, exists := t.Members[fn.Field]; exists {
 				sig = member
 			} else {
-				c.error(fn.Dot, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, fn.Field), "")
+				c.error(fn.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, fn.Field), "")
 				return nil
 			}
 		case *RecordType:
 			if method, ok := t.Methods[fn.Field]; ok {
 				sig = method
 			} else {
-				c.error(fn.Dot, "E039", fmt.Sprintf("type %s has no method '%s'", t.Name, fn.Field), "")
+				c.error(fn.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", t.Name, fn.Field), "")
 				return nil
 			}
 		case *ComponentType:
@@ -633,7 +633,7 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 
 	if sig == nil {
 		if calleeType != nil {
-			c.error(call.LParen, "E049", fmt.Sprintf("cannot call non-function type %s", FormatType(calleeType)), "")
+			c.error(call.LParen, 0, "E049", fmt.Sprintf("cannot call non-function type %s", FormatType(calleeType)), "")
 		}
 		return nil
 	}
@@ -658,13 +658,13 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 	for _, arg := range call.Args {
 		if arg.Name != "" {
 			if _, exists := named[arg.Name]; exists {
-				c.error(arg.Posn, "E028", fmt.Sprintf("duplicate named argument '%s'", arg.Name), "")
+				c.error(arg.Posn, 0, "E028", fmt.Sprintf("duplicate named argument '%s'", arg.Name), "")
 			}
 			named[arg.Name] = arg.Value
 			namedOrder = append(namedOrder, arg.Name)
 		} else {
 			if len(named) > 0 {
-				c.error(arg.Posn, "E029", "positional argument not allowed after named argument", "put positional arguments before named arguments")
+				c.error(arg.Posn, 0, "E029", "positional argument not allowed after named argument", "put positional arguments before named arguments")
 			}
 			positional = append(positional, arg.Value)
 		}
@@ -673,17 +673,17 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 	// Check positional args.
 	for i, arg := range positional {
 		if i >= len(sig.Params) {
-			c.error(call.RParen, "E026", fmt.Sprintf("expected %d arguments, got %d", len(sig.Params), len(call.Args)), "")
+			c.error(call.RParen, 0, "E026", fmt.Sprintf("expected %d arguments, got %d", len(sig.Params), len(call.Args)), "")
 			return
 		}
 		argType := c.checkExpr(arg)
 		paramType := sig.Params[i].Type
 		if argType != nil && paramType != nil && !IsAssignable(argType, paramType) {
-			c.error(arg.Pos(), "E022", fmt.Sprintf("cannot use %s as %s", FormatType(argType), FormatType(paramType)), "")
+			c.error(arg.Pos(), arg.End().Col-arg.Pos().Col, "E022", fmt.Sprintf("cannot use %s as %s", FormatType(argType), FormatType(paramType)), "")
 		}
 		if sig.Params[i].Ref {
 			if _, ok := arg.(*ast.Ident); !ok {
-				c.error(arg.Pos(), "E034", fmt.Sprintf("ref parameter '%s' requires a variable", sig.Params[i].Name), "")
+				c.error(arg.Pos(), 0, "E034", fmt.Sprintf("ref parameter '%s' requires a variable", sig.Params[i].Name), "")
 			}
 		}
 	}
@@ -697,18 +697,18 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 				found = true
 				argType := c.checkExpr(argVal)
 				if argType != nil && param.Type != nil && !IsAssignable(argType, param.Type) {
-					c.error(argVal.Pos(), "E022", fmt.Sprintf("cannot use %s as %s", FormatType(argType), FormatType(param.Type)), "")
+					c.error(argVal.Pos(), argVal.End().Col-argVal.Pos().Col, "E022", fmt.Sprintf("cannot use %s as %s", FormatType(argType), FormatType(param.Type)), "")
 				}
 				if param.Ref {
 					if _, ok := argVal.(*ast.Ident); !ok {
-						c.error(argVal.Pos(), "E034", fmt.Sprintf("ref parameter '%s' requires a variable", param.Name), "")
+						c.error(argVal.Pos(), 0, "E034", fmt.Sprintf("ref parameter '%s' requires a variable", param.Name), "")
 					}
 				}
 				break
 			}
 		}
 		if !found {
-			c.error(call.LParen, "E027", fmt.Sprintf("unknown named argument '%s'", name), "")
+			c.error(call.LParen, 0, "E027", fmt.Sprintf("unknown named argument '%s'", name), "")
 		}
 	}
 
@@ -718,7 +718,7 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 		// Find the first missing param.
 		for i := len(positional); i < len(sig.Params); i++ {
 			if _, ok := named[sig.Params[i].Name]; !ok {
-				c.error(call.LParen, "E026", fmt.Sprintf("expected %d arguments, got %d", len(sig.Params), provided), "")
+				c.error(call.LParen, 0, "E026", fmt.Sprintf("expected %d arguments, got %d", len(sig.Params), provided), "")
 				return
 			}
 		}
@@ -743,7 +743,7 @@ func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
 		if method, ok := t.Methods[f.Field]; ok {
 			return method
 		}
-		c.error(f.Dot, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
+		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
 		return nil
 	case *NamespaceType:
 		if member, ok := t.Members[f.Field]; ok {
@@ -752,13 +752,13 @@ func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
 		if ct, ok := t.Consts[f.Field]; ok {
 			return ct
 		}
-		c.error(f.Dot, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
+		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
 		return nil
 	case *ComponentType:
 		if prop, ok := t.Properties[f.Field]; ok {
 			return prop.Type
 		}
-		c.error(f.Dot, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
+		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
 		return nil
 	default:
 		return nil
@@ -776,14 +776,14 @@ func (c *Checker) checkIndexExpr(idx *ast.IndexExpr) Type {
 		case "List":
 			if len(t.Params) == 1 {
 				if indexType != nil && !IsAssignable(indexType, IntType) {
-					c.error(idx.LBrack, "E041", fmt.Sprintf("index must be int, got %s", FormatType(indexType)), "")
+					c.error(idx.LBrack, 0, "E041", fmt.Sprintf("index must be int, got %s", FormatType(indexType)), "")
 				}
 				return t.Params[0]
 			}
 		case "Dict":
 			if len(t.Params) == 2 {
 				if indexType != nil && !IsAssignable(indexType, t.Params[0]) {
-					c.error(idx.LBrack, "E041", fmt.Sprintf("index must be %s, got %s", FormatType(t.Params[0]), FormatType(indexType)), "")
+					c.error(idx.LBrack, 0, "E041", fmt.Sprintf("index must be %s, got %s", FormatType(t.Params[0]), FormatType(indexType)), "")
 				}
 				return t.Params[1]
 			}
@@ -791,14 +791,14 @@ func (c *Checker) checkIndexExpr(idx *ast.IndexExpr) Type {
 	case *PrimitiveType:
 		if t.Name == "string" {
 			if indexType != nil && !IsAssignable(indexType, IntType) {
-				c.error(idx.LBrack, "E041", fmt.Sprintf("index must be int, got %s", FormatType(indexType)), "")
+				c.error(idx.LBrack, 0, "E041", fmt.Sprintf("index must be int, got %s", FormatType(indexType)), "")
 			}
 			return CharType
 		}
 	}
 
 	if base != nil {
-		c.error(idx.LBrack, "E040", fmt.Sprintf("type %s is not indexable", FormatType(base)), "")
+		c.error(idx.LBrack, 0, "E040", fmt.Sprintf("type %s is not indexable", FormatType(base)), "")
 	}
 	return nil
 }
@@ -812,7 +812,7 @@ func (c *Checker) checkListLiteral(l *ast.ListLiteral) Type {
 	for _, el := range l.Elements[1:] {
 		t := c.checkExpr(el)
 		if elemType != nil && t != nil && !IsAssignable(t, elemType) {
-			c.error(el.Pos(), "E022", fmt.Sprintf("list element type mismatch: expected %s, got %s", FormatType(elemType), FormatType(t)), "")
+			c.error(el.Pos(), el.End().Col-el.Pos().Col, "E022", fmt.Sprintf("list element type mismatch: expected %s, got %s", FormatType(elemType), FormatType(t)), "")
 		}
 	}
 	if elemType == nil {
@@ -833,10 +833,10 @@ func (c *Checker) checkDictLiteral(d *ast.DictLiteral) Type {
 		kt := c.checkExpr(pair.Key)
 		vt := c.checkExpr(pair.Value)
 		if keyType != nil && kt != nil && !IsAssignable(kt, keyType) {
-			c.error(pair.Key.Pos(), "E022", fmt.Sprintf("dict key type mismatch: expected %s, got %s", FormatType(keyType), FormatType(kt)), "")
+			c.error(pair.Key.Pos(), pair.Key.End().Col-pair.Key.Pos().Col, "E022", fmt.Sprintf("dict key type mismatch: expected %s, got %s", FormatType(keyType), FormatType(kt)), "")
 		}
 		if valType != nil && vt != nil && !IsAssignable(vt, valType) {
-			c.error(pair.Value.Pos(), "E022", fmt.Sprintf("dict value type mismatch: expected %s, got %s", FormatType(valType), FormatType(vt)), "")
+			c.error(pair.Value.Pos(), pair.Value.End().Col-pair.Value.Pos().Col, "E022", fmt.Sprintf("dict value type mismatch: expected %s, got %s", FormatType(valType), FormatType(vt)), "")
 		}
 	}
 	if keyType == nil {
@@ -853,10 +853,10 @@ func (c *Checker) checkRangeExpr(r *ast.RangeExpr) Type {
 	low := c.checkExpr(r.Low)
 	high := c.checkExpr(r.High)
 	if low != nil && !IsAssignable(low, IntType) {
-		c.error(r.Low.Pos(), "E048", fmt.Sprintf("range lower bound must be int, got %s", FormatType(low)), "")
+		c.error(r.Low.Pos(), 0, "E048", fmt.Sprintf("range lower bound must be int, got %s", FormatType(low)), "")
 	}
 	if high != nil && !IsAssignable(high, IntType) {
-		c.error(r.High.Pos(), "E048", fmt.Sprintf("range upper bound must be int, got %s", FormatType(high)), "")
+		c.error(r.High.Pos(), 0, "E048", fmt.Sprintf("range upper bound must be int, got %s", FormatType(high)), "")
 	}
 	// Ranges are not directly typed in LealLang (used in loop context).
 	return nil
@@ -884,7 +884,7 @@ func (c *Checker) checkSwitchExpr(s *ast.SwitchExpr) Type {
 		if resultType == nil {
 			resultType = armType
 		} else if armType != nil && !IsAssignable(armType, resultType) {
-			c.error(arm.Value.Pos(), "E042",
+			c.error(arm.Value.Pos(), 0, "E042",
 				fmt.Sprintf("switch arms must all have the same type; got %s and %s", FormatType(resultType), FormatType(armType)), "")
 		}
 	}
@@ -900,7 +900,7 @@ func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
 			return ct
 		}
 	}
-	c.error(cr.AtPos, "E043", fmt.Sprintf("unknown component type '%s'", cr.Component), "")
+	c.error(cr.AtPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", cr.Component), "")
 	return nil
 }
 
@@ -946,19 +946,19 @@ func (c *Checker) checkAssignStmt(a *ast.AssignStmt) {
 				Pos:  ident.NamePos,
 			}
 			if dup := c.scope.Define(newSym); dup != "" {
-				c.error(ident.NamePos, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
+				c.error(ident.NamePos, 0, "E050", fmt.Sprintf("duplicate name '%s' in this scope", dup), "")
 			}
 			return
 		}
 		// Existing variable: check reassignment.
 		if sym.Kind == SymConst {
-			c.error(a.EqPos, "E033", fmt.Sprintf("cannot reassign const '%s'", ident.Name), "")
+			c.error(a.EqPos, 0, "E033", fmt.Sprintf("cannot reassign const '%s'", ident.Name), "")
 		}
 	}
 
 	targetType := c.checkExpr(a.Target)
 	valType := c.checkExpr(a.Value)
-	c.checkAssignment(valType, targetType, a.EqPos)
+	c.checkAssignment(valType, targetType, a.EqPos, a.Value.End().Col-a.Value.Pos().Col)
 }
 
 // checkReturnStmt checks a return statement.
@@ -966,10 +966,10 @@ func (c *Checker) checkReturnStmt(r *ast.ReturnStmt, returnType Type) {
 	if r.Value != nil {
 		valType := c.checkExpr(r.Value)
 		if returnType == nil {
-			c.error(r.ReturnPos, "E037", "return with value in void function", "remove the return value or add a return type to the function")
+			c.error(r.ReturnPos, 0, "E037", "return with value in void function", "remove the return value or add a return type to the function")
 		} else if valType != nil && returnType != nil {
 			if !IsAssignable(valType, returnType) {
-				c.error(r.ReturnPos, "E036", fmt.Sprintf("return type mismatch: expected %s, got %s", FormatType(returnType), FormatType(valType)), "")
+				c.error(r.ReturnPos, 0, "E036", fmt.Sprintf("return type mismatch: expected %s, got %s", FormatType(returnType), FormatType(valType)), "")
 			}
 		}
 	}
@@ -981,7 +981,7 @@ func (c *Checker) checkReturnStmt(r *ast.ReturnStmt, returnType Type) {
 func (c *Checker) checkIfStmt(i *ast.IfStmt, returnType Type) {
 	condType := c.checkExpr(i.Condition)
 	if condType != nil && !IsAssignable(condType, BoolType) {
-		c.error(i.IfPos, "E047", fmt.Sprintf("condition must be bool, got %s", FormatType(condType)), "")
+		c.error(i.IfPos, 0, "E047", fmt.Sprintf("condition must be bool, got %s", FormatType(condType)), "")
 	}
 	for _, stmt := range i.Body {
 		c.checkStmt(stmt, returnType)
@@ -989,7 +989,7 @@ func (c *Checker) checkIfStmt(i *ast.IfStmt, returnType Type) {
 	for _, elif := range i.ElseIfs {
 		elifCond := c.checkExpr(elif.Condition)
 		if elifCond != nil && !IsAssignable(elifCond, BoolType) {
-			c.error(elif.ElseIfPos, "E047", fmt.Sprintf("condition must be bool, got %s", FormatType(elifCond)), "")
+			c.error(elif.ElseIfPos, 0, "E047", fmt.Sprintf("condition must be bool, got %s", FormatType(elifCond)), "")
 		}
 		for _, stmt := range elif.Body {
 			c.checkStmt(stmt, returnType)
@@ -1051,19 +1051,19 @@ func (c *Checker) checkLoopStmt(l *ast.LoopStmt, returnType Type) {
 	if l.Step != nil {
 		stepType := c.checkExpr(l.Step)
 		if stepType != nil && !IsAssignable(stepType, IntType) {
-			c.error(l.Step.Pos(), "E022", fmt.Sprintf("step must be int, got %s", FormatType(stepType)), "")
+			c.error(l.Step.Pos(), l.Step.End().Col-l.Step.Pos().Col, "E022", fmt.Sprintf("step must be int, got %s", FormatType(stepType)), "")
 		}
 	}
 	if l.While != nil {
 		whileType := c.checkExpr(l.While)
 		if whileType != nil && !IsAssignable(whileType, BoolType) {
-			c.error(l.While.Pos(), "E047", fmt.Sprintf("while condition must be bool, got %s", FormatType(whileType)), "")
+			c.error(l.While.Pos(), 0, "E047", fmt.Sprintf("while condition must be bool, got %s", FormatType(whileType)), "")
 		}
 	}
 	if l.IfCond != nil {
 		ifType := c.checkExpr(l.IfCond)
 		if ifType != nil && !IsAssignable(ifType, BoolType) {
-			c.error(l.IfCond.Pos(), "E047", fmt.Sprintf("if condition must be bool, got %s", FormatType(ifType)), "")
+			c.error(l.IfCond.Pos(), 0, "E047", fmt.Sprintf("if condition must be bool, got %s", FormatType(ifType)), "")
 		}
 	}
 
@@ -1108,20 +1108,20 @@ func numericResult(a, b Type) Type {
 }
 
 // checkAssignment checks a value-to-target type assignment and reports the appropriate error.
-func (c *Checker) checkAssignment(valType, targetType Type, pos token.Position) {
+func (c *Checker) checkAssignment(valType, targetType Type, pos token.Position, span int) {
 	if valType == nil || targetType == nil {
 		return
 	}
 	// Special case: null to non-nullable.
 	if _, ok := valType.(*NullType); ok {
 		if _, isNullable := targetType.(*NullableType); !isNullable {
-			c.error(pos, "E023",
+			c.error(pos, span, "E023",
 				fmt.Sprintf("cannot assign null to non-nullable type %s", FormatType(targetType)), "")
 			return
 		}
 	}
 	if !IsAssignable(valType, targetType) {
-		c.error(pos, "E022",
+		c.error(pos, span, "E022",
 			fmt.Sprintf("cannot use %s as %s", FormatType(valType), FormatType(targetType)), "")
 	}
 }
@@ -1137,6 +1137,6 @@ func joinPath(path []string) string {
 	return out
 }
 
-func (c *Checker) error(pos token.Position, code, msg, hint string) {
-	c.diag.ReportError(code, msg, pos, hint, "")
+func (c *Checker) error(pos token.Position, span int, code, msg, hint string) {
+	c.diag.ReportError(code, msg, pos, span, hint, "")
 }

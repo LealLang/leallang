@@ -47,6 +47,7 @@ type Diagnostic struct {
 	Code       string // e.g. "E001", "W001"
 	Message    string
 	Pos        token.Position
+	Span       int    // highlight width in columns; 0 = default = 1 char
 	Hint       string // optional fix suggestion
 	SourceLine string // source text of the line for excerpt display
 }
@@ -63,24 +64,26 @@ func New() *Diagnostics {
 }
 
 // ReportError adds an error diagnostic.
-func (d *Diagnostics) ReportError(code, msg string, pos token.Position, hint, sourceLine string) {
+func (d *Diagnostics) ReportError(code, msg string, pos token.Position, span int, hint, sourceLine string) {
 	d.items = append(d.items, Diagnostic{
 		Severity:   Error,
 		Code:       code,
 		Message:    msg,
 		Pos:        pos,
+		Span:       span,
 		Hint:       hint,
 		SourceLine: sourceLine,
 	})
 }
 
 // ReportWarning adds a warning diagnostic.
-func (d *Diagnostics) ReportWarning(code, msg string, pos token.Position, hint, sourceLine string) {
+func (d *Diagnostics) ReportWarning(code, msg string, pos token.Position, span int, hint, sourceLine string) {
 	d.items = append(d.items, Diagnostic{
 		Severity:   Warning,
 		Code:       code,
 		Message:    msg,
 		Pos:        pos,
+		Span:       span,
 		Hint:       hint,
 		SourceLine: sourceLine,
 	})
@@ -162,25 +165,28 @@ func (d *Diagnostics) formatOne(b *strings.Builder, diag Diagnostic) {
 	if sourceLine != "" {
 		// 12 |     label: `name`  (gray line num, source with red highlight)
 		col := diag.Pos.Col // 1-based
+		width := max(1, diag.Span)
 		b.WriteString(colorGray + lineNumStr + " |" + colorReset + " ")
 
-		// Write source with the "guilty" character highlighted in red
+		// Write source with the "guilty" span highlighted in red
 		if col >= 1 && col <= len(sourceLine) {
-			before := sourceLine[:col-1]
-			char := sourceLine[col-1 : col]
-			after := ""
-			if col < len(sourceLine) {
-				after = sourceLine[col:]
+			end := col - 1 + width
+			if end > len(sourceLine) {
+				end = len(sourceLine)
 			}
-			b.WriteString(before + colorRed + string(char) + colorReset + after)
+			before := sourceLine[:col-1]
+			highlighted := sourceLine[col-1 : end]
+			after := sourceLine[end:]
+			b.WriteString(before + colorRed + highlighted + colorReset + after)
 		} else {
 			b.WriteString(sourceLine)
 		}
 		b.WriteString("\n")
 
-		//   |            ^ unexpected character  (gray pipe, red caret + message)
+		//   |            ~~~~ message  (gray pipe, red tildes + message)
+		caret := strings.Repeat("~", width)
 		b.WriteString(sepPrefix + strings.Repeat(" ", col-1) +
-			colorRed + "^ " + diag.Message + colorReset + "\n")
+			colorRed + caret + " " + diag.Message + colorReset + "\n")
 	}
 
 	// = hint: ...  (orange)
