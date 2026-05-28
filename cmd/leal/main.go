@@ -4,20 +4,26 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
+	"github.com/LealLang/leallang/internal/ast"
 	"github.com/LealLang/leallang/internal/diagnostics"
 	"github.com/LealLang/leallang/internal/lexer"
+	"github.com/LealLang/leallang/internal/parser"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: leal <file.ll>\n")
+	showTokens := flag.Bool("tokens", false, "print token stream instead of AST")
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		fmt.Fprintf(os.Stderr, "usage: leal [--tokens] <file.ll>\n")
 		os.Exit(1)
 	}
 
-	filename := os.Args[1]
+	filename := flag.Arg(0)
 	src, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -28,13 +34,24 @@ func main() {
 	l := lexer.New(filename, string(src), diag)
 	tokens := l.Tokenize()
 
-	for _, tok := range tokens {
-		fmt.Println(tok.String())
+	if *showTokens {
+		for _, tok := range tokens {
+			fmt.Println(tok.String())
+		}
+		if diag.HasErrors() {
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, diag.Format())
+			os.Exit(1)
+		}
+		return
 	}
 
+	program := parser.New(tokens, diag).Parse()
+
 	if diag.HasErrors() {
-		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, diag.Format())
 		os.Exit(1)
 	}
+
+	ast.Print(os.Stdout, program)
 }

@@ -4,9 +4,23 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] - 28-05-2026
+
+### Added
+- Updated `cmd/leal` CLI to parse `.ll` files using the AST parser by default
+- Added `--tokens` flag to `cmd/leal` for raw token output
+- Added `examples/full.ll` with types, constructors, switch expressions, loops, and interpolated strings
+
 ## [0] - 27-05-2006
 
 ### Added
+
+- Go compiler Phase 2 parser implementation:
+  - `internal/ast` package: AST node definitions for programs, declarations, statements, expressions, type annotations, and a debug pretty-printer
+  - `internal/parser` package: recursive descent/Pratt parser from lexer token streams to AST programs
+  - Parser diagnostics E011-E020 for argument ordering, interpolation braces, expected tokens, assignment targets, control-flow misuse, loop modifiers, switches, and package placement
+  - Parser tests covering declarations, expressions, statements, switches, loops, interpolation, recovery, pretty-printing, and an end-to-end snippet
+  - Updated `cmd/leal` CLI to parse `.ll` files and print AST by default, with `--tokens` flag for raw token output
 
 - Go compiler Phase 1 implementation:
   - `internal/token` package: TokenKind enum (60+ kinds), Token struct, Position struct, keyword lookup
