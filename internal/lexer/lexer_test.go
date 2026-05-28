@@ -82,6 +82,17 @@ func expectTokenLiterals(t *testing.T, src string, expected []struct {
 	}
 }
 
+// requireErrorCode asserts that a diagnostic with the given code exists.
+func requireErrorCode(t *testing.T, diag *diagnostics.Diagnostics, code string) {
+	t.Helper()
+	for _, err := range diag.Errors() {
+		if err.Code == code {
+			return
+		}
+	}
+	t.Fatalf("expected diagnostic %s, got:\n%s", code, diag.Format())
+}
+
 // --- Tests ---
 
 func TestKeywords(t *testing.T) {
@@ -607,4 +618,51 @@ func TestIndentationNotMultipleOf4(t *testing.T) {
 	if !found {
 		t.Errorf("expected E007 in errors, got %v", errs)
 	}
+}
+
+// --- Additional diagnostic tests ---
+
+func TestErrorUnexpectedBang(t *testing.T) {
+	_, diag := collectTokensWithDiag(t, "x ! y")
+	requireErrorCode(t, diag, "E001")
+}
+
+func TestErrorUnexpectedDollar(t *testing.T) {
+	_, diag := collectTokensWithDiag(t, "x $ y")
+	requireErrorCode(t, diag, "E001")
+}
+
+func TestErrorUnterminatedStringAtNewline(t *testing.T) {
+	_, diag := collectTokensWithDiag(t, "\"hello\n")
+	requireErrorCode(t, diag, "E002")
+}
+
+func TestErrorUnterminatedInterpStringAtEOF(t *testing.T) {
+	_, diag := collectTokensWithDiag(t, "$\"hello")
+	requireErrorCode(t, diag, "E002")
+}
+
+func TestErrorUnterminatedInterpStringAtNewline(t *testing.T) {
+	_, diag := collectTokensWithDiag(t, "$\"hello\n")
+	requireErrorCode(t, diag, "E002")
+}
+
+func TestErrorInvalidCharEscape(t *testing.T) {
+	// Source: single-quote, backslash, q, single-quote
+	_, diag := collectTokensWithDiag(t, "'\\q'")
+	requireErrorCode(t, diag, "E005")
+}
+
+func TestErrorUnmatchedOuterIndentation(t *testing.T) {
+	// indent to 8 spaces (level 2), then dedent to 4 spaces (level 1) is ok
+	// but dedent to 2 spaces doesn't match any outer level
+	src := "if x:\n        pass\n  y = 1\n"
+	_, diag := collectTokensWithDiag(t, src)
+	requireErrorCode(t, diag, "E008")
+}
+
+func TestErrorEmptyCharCode(t *testing.T) {
+	// E009 triggers when EOF or newline follows the opening quote
+	_, diag := collectTokensWithDiag(t, "'")
+	requireErrorCode(t, diag, "E009")
 }
