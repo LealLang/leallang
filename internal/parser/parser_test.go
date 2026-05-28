@@ -517,6 +517,129 @@ func main():
 	}
 }
 
+func TestErrorConstRequiresValue(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+const X: int
+`)
+	requireErrorCode(t, diag, "E013")
+}
+
+func TestErrorInvalidAssignmentTarget(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+func main():
+    1 = 2
+`)
+	requireErrorCode(t, diag, "E014")
+}
+
+func TestErrorElseWithoutMatchingIf(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+func main():
+    else:
+        pass
+`)
+	requireErrorCode(t, diag, "E015")
+}
+
+func TestErrorContinueOutsideLoop(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+func main():
+    continue
+`)
+	requireErrorCode(t, diag, "E016")
+}
+
+func TestErrorDuplicateWhileModifier(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+func main():
+    loop i in 0..10, while i < 8, while i < 5:
+        pass
+`)
+	requireErrorCode(t, diag, "E017")
+}
+
+func TestErrorDuplicateIfModifier(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+func main():
+    loop i in 0..10, if i != 4, if i != 2:
+        pass
+`)
+	requireErrorCode(t, diag, "E017")
+}
+
+func TestErrorPackageMustBeFirst(t *testing.T) {
+	_, diag := parseSource(t, `import app.util
+
+package app.main
+`)
+	requireErrorCode(t, diag, "E019")
+}
+
+func TestErrorMultiplePackageDeclarations(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+package app.other
+`)
+	requireErrorCode(t, diag, "E020")
+}
+
+func TestErrorEmptySwitchStatement(t *testing.T) {
+	// Build token stream directly: empty switch body
+	toks := []token.Token{
+		{Kind: token.SWITCH, Pos: token.Position{File: "test.ll", Line: 1, Col: 1}},
+		{Kind: token.IDENT, Lexeme: "x", Pos: token.Position{File: "test.ll", Line: 1, Col: 8}},
+		{Kind: token.COLON, Pos: token.Position{File: "test.ll", Line: 1, Col: 9}},
+		{Kind: token.NEWLINE, Pos: token.Position{File: "test.ll", Line: 1, Col: 10}},
+		{Kind: token.INDENT, Pos: token.Position{File: "test.ll", Line: 2, Col: 1}},
+		{Kind: token.DEDENT, Pos: token.Position{File: "test.ll", Line: 2, Col: 1}},
+	}
+	diag := diagnostics.New()
+	p := New(toks, diag)
+	program := &ast.Program{
+		Package: &ast.PackageDecl{Path: []string{"app"}},
+		Decls: []ast.Decl{&ast.FuncDecl{
+			Name: "main",
+			Body: []ast.Stmt{p.parseSwitchStmt()},
+		}},
+	}
+	_ = program
+	requireErrorCode(t, diag, "E018")
+}
+
+func TestErrorEmptySwitchExpression(t *testing.T) {
+	// Build token stream directly: empty switch expression body
+	toks := []token.Token{
+		{Kind: token.SWITCH, Pos: token.Position{File: "test.ll", Line: 1, Col: 1}},
+		{Kind: token.IDENT, Lexeme: "x", Pos: token.Position{File: "test.ll", Line: 1, Col: 8}},
+		{Kind: token.COLON, Pos: token.Position{File: "test.ll", Line: 1, Col: 9}},
+		{Kind: token.NEWLINE, Pos: token.Position{File: "test.ll", Line: 1, Col: 10}},
+		{Kind: token.INDENT, Pos: token.Position{File: "test.ll", Line: 2, Col: 1}},
+		{Kind: token.DEDENT, Pos: token.Position{File: "test.ll", Line: 2, Col: 1}},
+	}
+	start := toks[0]
+	diag := diagnostics.New()
+	p := New(toks, diag)
+	_ = p.parseSwitchExpr(start)
+	requireErrorCode(t, diag, "E018")
+}
+
+func TestErrorUnterminatedInterpolationBrace(t *testing.T) {
+	// $"Hello, {name" — the lexer produces an INTERP_STRING_LIT token;
+	// the parser's interpolation splitter should emit E012 for the unmatched brace.
+	_, diag := parseSource(t, `package app.main
+
+func main():
+    x = $"Hello, {name"
+`)
+	requireErrorCode(t, diag, "E012")
+}
+
 func TestPrettyPrinter(t *testing.T) {
 	program, diag := parseSource(t, `package app.main
 
