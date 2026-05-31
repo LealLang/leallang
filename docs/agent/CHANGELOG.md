@@ -29,6 +29,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `internal/interpreter/value.go`: `TaskVal` runtime value, `Async`/`UI` on `FuncVal`
   - `internal/interpreter/interpreter.go`: async func returns `TaskVal`, `await` unwraps `TaskVal`
 
+### Fixed
+
+- `internal/checker/checker.go`: `asyncPayloadType` now checks `RecordType.Name == "Error"` instead of matching any `RecordType` when stripping trailing `Error?` from async return tuples
+
 ## [0] - 30-05-2026
 
 - Added `docs/superpowers/specs/2026-05-31-threading-concurrency-design.md` documenting the proposed first threading/concurrency model: per-window UI actors, window-owned `ui func`s, `async func` tasks, `await`, sendable task boundaries, and cancel-on-close lifecycle semantics.

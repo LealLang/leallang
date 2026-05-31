@@ -729,7 +729,7 @@ func asyncPayloadType(ret Type) Type {
 	if tuple, ok := ret.(*TupleType); ok && len(tuple.Elements) > 0 {
 		last := tuple.Elements[len(tuple.Elements)-1]
 		if nullable, ok := last.(*NullableType); ok {
-			if _, isErr := nullable.Inner.(*RecordType); isErr {
+			if rec, isRec := nullable.Inner.(*RecordType); isRec && rec.Name == "Error" {
 				// Last element is Error? -- strip it.
 				if len(tuple.Elements) == 1 {
 					return &Void{} // only Error? return
@@ -742,7 +742,7 @@ func asyncPayloadType(ret Type) Type {
 		}
 	}
 	if nullable, ok := ret.(*NullableType); ok {
-		if _, isErr := nullable.Inner.(*RecordType); isErr {
+		if rec, isRec := nullable.Inner.(*RecordType); isRec && rec.Name == "Error" {
 			return &Void{} // only Error? return
 		}
 	}
