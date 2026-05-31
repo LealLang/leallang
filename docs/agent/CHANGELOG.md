@@ -4,7 +4,11 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] - 28-05-2026
+## [0] - 30-05-2026
+
+- Added `docs/superpowers/specs/2026-05-31-threading-concurrency-design.md` documenting the proposed first threading/concurrency model: per-window UI actors, window-owned `ui func`s, `async func` tasks, `await`, sendable task boundaries, and cancel-on-close lifecycle semantics.
+
+## [0] - 28-05-2026
 
 ### Fixed
 
@@ -13,7 +17,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Added `docs/superpowers/specs/2026-05-31-threading-concurrency-design.md` documenting the proposed first threading/concurrency model: per-window UI actors, window-owned `ui func`s, `async func` tasks, `await`, sendable task boundaries, and cancel-on-close lifecycle semantics.
 - Go compiler Phase 4 tree-walking interpreter implementation:
   - `internal/interpreter` package: runtime values, lexical environments, control-flow signals, expression/statement evaluator, function calls, records, constructors, methods, loops, switches, interpolation, lists, dicts, and ranges
   - Runtime built-in namespaces for `console`, `file`, `json`, and `system`, plus UI-related stub namespaces matching the checker
