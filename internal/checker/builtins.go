@@ -30,6 +30,8 @@ func registerPrimitives(global *Scope) {
 	for _, p := range prims {
 		global.Define(&Symbol{Name: p.name, Type: p.typ, Kind: SymType, Pub: true})
 	}
+	// Register Task as a generic type sentinel.
+	global.Define(&Symbol{Name: "Task", Type: &GenericType{Name: "Task", Params: []Type{AnyType}}, Kind: SymType, Pub: true})
 }
 
 func registerErrorType(global *Scope) {

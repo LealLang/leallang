@@ -71,7 +71,7 @@ func (interp *Interpreter) Run(program *ast.Program) error {
 	for _, decl := range program.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			interp.globals.Set(d.Name, &FuncVal{Name: d.Name, Params: d.Params, Body: d.Body, Closure: interp.globals})
+			interp.globals.Set(d.Name, &FuncVal{Name: d.Name, Params: d.Params, Body: d.Body, Closure: interp.globals, Async: d.Async, UI: d.UI})
 		case *ast.TypeDecl:
 			interp.globals.Set(d.Name, &RecordTypeVal{Decl: d})
 		}
@@ -134,6 +134,15 @@ func (interp *Interpreter) evalExpr(expr ast.Expr, env *Env) (Value, error) {
 		return interp.evalBinary(e, env)
 	case *ast.UnaryExpr:
 		return interp.evalUnary(e, env)
+	case *ast.AwaitExpr:
+		val, err := interp.evalExpr(e.X, env)
+		if err != nil {
+			return nil, err
+		}
+		if task, ok := val.(*TaskVal); ok {
+			return task.Result, nil
+		}
+		return val, nil
 	case *ast.CallExpr:
 		return interp.evalCall(e, env)
 	case *ast.FieldExpr:
@@ -268,13 +277,19 @@ func (interp *Interpreter) callFuncWithRefs(fn Value, args []Value, refArgs []*c
 		if err != nil {
 			return nil, err
 		}
+		var result Value
 		if sig != nil {
 			if sig.Kind != signalReturn {
 				return nil, interp.runtimeError("E101", pos, 0, sig.Error()+" outside loop", "")
 			}
-			return sig.Value, nil
+			result = sig.Value
+		} else {
+			result = Null
 		}
-		return Null, nil
+		if f.Async {
+			return &TaskVal{Result: result}, nil
+		}
+		return result, nil
 	case *BoundMethodVal:
 		return interp.callMethod(f, args, refArgs, pos)
 	case *RecordTypeVal:

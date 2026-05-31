@@ -76,6 +76,8 @@ type ConstDecl struct {
 type FuncDecl struct {
 	FuncPos     token.Position
 	Pub         bool
+	Async       bool
+	UI          bool
 	Name        string
 	Params      []*Param
 	ReturnTypes []TypeExpr
@@ -267,6 +269,12 @@ type UnaryExpr struct {
 	X     Expr
 }
 
+// AwaitExpr represents `await <expr>`.
+type AwaitExpr struct {
+	AwaitPos token.Position
+	X        Expr
+}
+
 // CallExpr represents a function call.
 type CallExpr struct {
 	Func   Expr
@@ -383,6 +391,7 @@ func (*InterpStringExpr) exprNode() {}
 func (*Ident) exprNode()            {}
 func (*BinaryExpr) exprNode()       {}
 func (*UnaryExpr) exprNode()        {}
+func (*AwaitExpr) exprNode()        {}
 func (*CallExpr) exprNode()         {}
 func (*FieldExpr) exprNode()        {}
 func (*IndexExpr) exprNode()        {}
@@ -606,6 +615,8 @@ func (b *BinaryExpr) Pos() token.Position       { return nodePos(b.Left) }
 func (b *BinaryExpr) End() token.Position       { return nodeEnd(b.Right) }
 func (u *UnaryExpr) Pos() token.Position        { return u.OpPos }
 func (u *UnaryExpr) End() token.Position        { return nodeEnd(u.X) }
+func (a *AwaitExpr) Pos() token.Position        { return a.AwaitPos }
+func (a *AwaitExpr) End() token.Position        { return nodeEnd(a.X) }
 func (c *CallExpr) Pos() token.Position         { return nodePos(c.Func) }
 func (c *CallExpr) End() token.Position         { return advancePosition(c.RParen, ")") }
 func (f *FieldExpr) Pos() token.Position        { return nodePos(f.X) }

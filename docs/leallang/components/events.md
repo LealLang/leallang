@@ -29,6 +29,24 @@ func save_clicked(e: ResizeEvent): # invalid for click
 
 Event handlers return no value.
 
+## Async Event Handlers
+
+Event handlers may suspend at `await`. Awaiting does not block the window actor — other events for the same window continue processing.
+
+```python
+func load_clicked():
+    @Label[status_label].text = "Loading..."
+
+    task = load_data("./data.json")
+    data, err = await task
+
+    if err != null:
+        @Label[status_label].text = "Load failed"
+        return
+
+    @Label[status_label].text = $"Loaded {data.count} items"
+```
+
 ## Click Event
 
 Type: `ClickEvent`

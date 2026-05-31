@@ -139,6 +139,8 @@ type FuncVal struct {
 	Params  []*ast.Param
 	Body    []ast.Stmt
 	Closure *Env
+	Async   bool
+	UI      bool
 }
 
 func (v *FuncVal) Type() string { return "function" }
@@ -211,6 +213,16 @@ type ComponentRefVal struct {
 
 func (v *ComponentRefVal) Type() string   { return v.Component }
 func (v *ComponentRefVal) String() string { return "@" + v.Component + "[" + v.ID + "]" }
+
+// TaskVal represents a resolved async task.
+type TaskVal struct {
+	Result Value
+}
+
+func (v *TaskVal) Type() string { return "Task" }
+func (v *TaskVal) String() string {
+	return fmt.Sprintf("<task %s>", valueString(v.Result))
+}
 
 func valueString(v Value) string {
 	if v == nil {

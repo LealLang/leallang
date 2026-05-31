@@ -123,14 +123,28 @@ func (p *Parser) parseQualifiedPath() []string {
 
 func (p *Parser) parseTopLevelDecl() ast.Decl {
 	pub := p.match(token.PUB)
+	async := p.match(token.ASYNC)
+	ui := p.match(token.UI)
 	switch {
 	case p.check(token.FUNC):
-		return p.parseFuncDecl(pub)
+		if async && ui {
+			p.errorAt(p.previous(), "E013", "function cannot be both async and ui", "choose either async or ui")
+		}
+		return p.parseFuncDecl(pub, async, ui)
 	case p.check(token.TYPE):
+		if async || ui {
+			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before type")
+		}
 		return p.parseTypeDecl()
 	case p.check(token.CONST):
+		if async || ui {
+			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before const")
+		}
 		return p.parseConstDecl()
 	case p.check(token.IDENT):
+		if async || ui {
+			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before variable declarations")
+		}
 		if p.checkNext(token.COLON) || p.checkNext(token.EQ) {
 			return p.parseVarDecl()
 		}
@@ -177,10 +191,10 @@ func (p *Parser) parseConstDecl() *ast.ConstDecl {
 	return decl
 }
 
-func (p *Parser) parseFuncDecl(pub bool) *ast.FuncDecl {
+func (p *Parser) parseFuncDecl(pub, async, ui bool) *ast.FuncDecl {
 	start := p.expect(token.FUNC, "function declaration")
 	name := p.expect(token.IDENT, "function name")
-	fn := &ast.FuncDecl{FuncPos: start.Pos, Pub: pub, Name: name.Lexeme}
+	fn := &ast.FuncDecl{FuncPos: start.Pos, Pub: pub, Async: async, UI: ui, Name: name.Lexeme}
 	p.expect(token.LPAREN, "'(' after function name")
 	if !p.check(token.RPAREN) && !p.atEnd() {
 		for {
@@ -228,7 +242,7 @@ func (p *Parser) parseTypeDecl() *ast.TypeDecl {
 		}
 		pub := p.match(token.PUB)
 		if p.check(token.FUNC) {
-			decl.Methods = append(decl.Methods, p.parseFuncDecl(pub))
+			decl.Methods = append(decl.Methods, p.parseFuncDecl(pub, false, false))
 			continue
 		}
 		if p.check(token.IDENT) && p.peek().Lexeme == "constructor" {
@@ -526,6 +540,9 @@ func (p *Parser) parsePrefix() ast.Expr {
 	case token.MINUS:
 		op := p.advance()
 		return &ast.UnaryExpr{OpPos: op.Pos, Op: op.Kind, X: p.parseExpression(precUnary)}
+	case token.AWAIT:
+		op := p.advance()
+		return &ast.AwaitExpr{AwaitPos: op.Pos, X: p.parseExpression(precUnary)}
 	default:
 		return p.parsePostfix(p.parsePrimary())
 	}
@@ -809,7 +826,7 @@ func (p *Parser) parseType(inTypeContext bool) ast.TypeExpr {
 
 func isGenericName(name string) bool {
 	switch name {
-	case "List", "Dict", "Stack", "Queue":
+	case "List", "Dict", "Stack", "Queue", "Task":
 		return true
 	default:
 		return false
@@ -938,7 +955,7 @@ func (p *Parser) synchronize() {
 		case token.NEWLINE:
 			p.advance()
 			return
-		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB:
+		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT:
 			return
 		}
 		p.advance()

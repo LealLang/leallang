@@ -59,6 +59,9 @@ const (
 	FLOAT_KW
 	BOOL_KW
 	CHAR_KW
+	ASYNC
+	AWAIT
+	UI
 
 	// Operators
 	PLUS
@@ -142,6 +145,9 @@ var kindNames = [...]string{
 	FLOAT_KW:  "FLOAT_KW",
 	BOOL_KW:   "BOOL_KW",
 	CHAR_KW:   "CHAR_KW",
+	ASYNC:     "ASYNC",
+	AWAIT:     "AWAIT",
+	UI:        "UI",
 
 	PLUS:         "PLUS",
 	MINUS:        "MINUS",
@@ -217,6 +223,9 @@ var keywords = map[string]TokenKind{
 	"float":    FLOAT_KW,
 	"bool":     BOOL_KW,
 	"char":     CHAR_KW,
+	"async":    ASYNC,
+	"await":    AWAIT,
+	"ui":       UI,
 }
 
 // LookupKeyword returns the TokenKind for a keyword, or IDENT if it is not a keyword.
