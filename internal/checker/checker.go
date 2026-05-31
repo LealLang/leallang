@@ -14,11 +14,12 @@ import (
 
 // Checker performs semantic analysis on an AST.
 type Checker struct {
-	program *ast.Program
-	diag    *diagnostics.Diagnostics
-	scope   *Scope
-	global  *Scope
-	pkgPath string
+	program     *ast.Program
+	diag        *diagnostics.Diagnostics
+	scope       *Scope
+	global      *Scope
+	pkgPath     string
+	inAsyncFunc bool
 }
 
 // Check performs semantic analysis on the given program.
@@ -149,6 +150,9 @@ func (c *Checker) collectTypeDecl(d *ast.TypeDecl) {
 
 // collectFuncDecl registers a function name in the global scope (Pass 1).
 func (c *Checker) collectFuncDecl(d *ast.FuncDecl) {
+	if d.Async && d.UI {
+		c.error(d.FuncPos, 0, "E060", "function cannot be both async and ui", "choose either async or ui")
+	}
 	sig := c.funcSignature(d)
 	sym := &Symbol{
 		Name: d.Name,
@@ -206,6 +210,15 @@ func (c *Checker) checkFuncDecl(d *ast.FuncDecl) {
 	prevScope := c.scope
 	c.scope = fnScope
 
+	// Check async-safety: no ref params in async func.
+	if d.Async {
+		for _, p := range d.Params {
+			if p.Ref {
+				c.error(p.Posn, 0, "E063", "ref parameter not allowed in async function", "async functions cannot have ref parameters")
+			}
+		}
+	}
+
 	// Define parameters in function scope.
 	for _, p := range d.Params {
 		paramType := c.resolveTypeExpr(p.Type)
@@ -219,11 +232,16 @@ func (c *Checker) checkFuncDecl(d *ast.FuncDecl) {
 		fnScope.Define(paramSym)
 	}
 
+	// Set async context for body checking.
+	prevAsync := c.inAsyncFunc
+	c.inAsyncFunc = d.Async
+
 	// Check body.
 	for _, stmt := range d.Body {
 		c.checkStmt(stmt, sig.ReturnType)
 	}
 
+	c.inAsyncFunc = prevAsync
 	c.scope = prevScope
 }
 
@@ -375,6 +393,8 @@ func (c *Checker) funcSignature(d *ast.FuncDecl) *FuncSignature {
 		Name:   d.Name,
 		Params: c.paramInfos(d.Params),
 		Pub:    d.Pub,
+		Async:  d.Async,
+		UI:     d.UI,
 	}
 	if len(d.ReturnTypes) == 1 {
 		sig.ReturnType = c.resolveTypeExpr(d.ReturnTypes[0])
@@ -446,6 +466,7 @@ func (c *Checker) checkExpr(expr ast.Expr) Type {
 	if expr == nil {
 		return nil
 	}
+	c.checkAsyncSafety(expr)
 	switch e := expr.(type) {
 	case *ast.Literal:
 		return c.checkLiteral(e)
@@ -455,6 +476,8 @@ func (c *Checker) checkExpr(expr ast.Expr) Type {
 		return c.checkBinaryExpr(e)
 	case *ast.UnaryExpr:
 		return c.checkUnaryExpr(e)
+	case *ast.AwaitExpr:
+		return c.checkAwaitExpr(e)
 	case *ast.CallExpr:
 		return c.checkCallExpr(e)
 	case *ast.FieldExpr:
@@ -478,6 +501,48 @@ func (c *Checker) checkExpr(expr ast.Expr) Type {
 	default:
 		return nil
 	}
+}
+
+// checkAsyncSafety checks async-safety rules for expressions inside async functions.
+func (c *Checker) checkAsyncSafety(expr ast.Expr) {
+	if !c.inAsyncFunc {
+		return
+	}
+	switch e := expr.(type) {
+	case *ast.ComponentRefExpr:
+		c.error(e.AtPos, 0, "E061", "UI component reference not allowed in async function", "async functions cannot access UI components")
+	case *ast.FieldExpr:
+		if ident, ok := e.X.(*ast.Ident); ok {
+			if isUIAffineNamespace(ident.Name) {
+				c.error(e.Dot, 0, "E062", fmt.Sprintf("namespace '%s' not allowed in async function", ident.Name), "async functions cannot use UI-affine namespaces")
+			}
+		}
+	}
+}
+
+func isUIAffineNamespace(name string) bool {
+	switch name {
+	case "window", "msg", "modal", "toast":
+		return true
+	default:
+		return false
+	}
+}
+
+// checkAwaitExpr checks an await expression and returns the unwrapped type.
+func (c *Checker) checkAwaitExpr(a *ast.AwaitExpr) Type {
+	innerType := c.checkExpr(a.X)
+	if innerType == nil {
+		return nil
+	}
+	if gt, ok := innerType.(*GenericType); ok && gt.Name == "Task" {
+		if len(gt.Params) == 1 {
+			return gt.Params[0]
+		}
+		return nil
+	}
+	c.error(a.AwaitPos, 0, "E064", fmt.Sprintf("cannot await non-task type %s", FormatType(innerType)), "await can only be used on Task values")
+	return nil
 }
 
 // checkLiteral returns the type of a literal.
@@ -645,7 +710,43 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 	if resultType != nil {
 		return resultType
 	}
+	// Async functions wrap their return type in Task<T>.
+	if sig.Async {
+		payload := asyncPayloadType(sig.ReturnType)
+		return &GenericType{Name: "Task", Params: []Type{payload}}
+	}
 	return sig.ReturnType
+}
+
+// asyncPayloadType extracts the task payload from an async function's return type.
+// If the return type is a TupleType ending with Error?, it strips the Error? and
+// wraps the remaining types. If the return type is only Error?, returns Void.
+// Otherwise returns the return type directly.
+func asyncPayloadType(ret Type) Type {
+	if ret == nil {
+		return &Void{}
+	}
+	if tuple, ok := ret.(*TupleType); ok && len(tuple.Elements) > 0 {
+		last := tuple.Elements[len(tuple.Elements)-1]
+		if nullable, ok := last.(*NullableType); ok {
+			if rec, isRec := nullable.Inner.(*RecordType); isRec && rec.Name == "Error" {
+				// Last element is Error? -- strip it.
+				if len(tuple.Elements) == 1 {
+					return &Void{} // only Error? return
+				}
+				if len(tuple.Elements) == 2 {
+					return tuple.Elements[0] // single value + Error?
+				}
+				return &TupleType{Elements: tuple.Elements[:len(tuple.Elements)-1]}
+			}
+		}
+	}
+	if nullable, ok := ret.(*NullableType); ok {
+		if rec, isRec := nullable.Inner.(*RecordType); isRec && rec.Name == "Error" {
+			return &Void{} // only Error? return
+		}
+	}
+	return ret
 }
 
 // checkCallArgs validates call arguments against a function signature.

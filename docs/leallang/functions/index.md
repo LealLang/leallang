@@ -185,3 +185,150 @@ func load_config(path: string) -> Config, Error?:
 ```
 
 There is no `try`, `catch`, `finally`, `throw`, or hidden error propagation syntax.
+
+---
+
+## async func
+
+`async func` declares work that can run outside any window actor.
+
+```python
+async func load_settings(path: string) -> Settings, Error?:
+    text, err = file.read_text(path)
+    if err != null:
+        return Settings(theme: "light", autosave: false), err
+
+    settings, parse_err = json.parse<Settings>(text)
+    return settings, parse_err
+```
+
+Calling an `async func` immediately returns a `Task`.
+
+```python
+task = load_settings("./settings.json")
+settings, err = await task
+```
+
+Allowed inside `async func`:
+
+- primitives: `char`, `string`, `int`, `float`, `bool`, `null`
+- records whose fields are sendable
+- `List<T>` and `Dict<K, V>` when their contents are sendable
+- pure/helper functions that do not touch UI
+- task-safe built-ins such as `file`, `json`, and selected `system` calls
+
+Forbidden inside `async func`:
+
+- UI refs such as `@Button[id]` or `@Window[id]`
+- UI-affine namespaces such as `window`, `msg`, `modal`, and `toast`
+- direct component reads or writes
+- `ref` parameters
+- shared mutable captures from a window or event handler
+
+---
+
+## ui func
+
+A `ui func` is a UI-facing function owned by a specific window. It is declared inside the owning `Window[...]` block.
+
+```python
+Window[main]("App"):
+    Label[theme_label]("Light")
+    Label[status_label]("Ready")
+
+    pub ui func apply_settings(settings: Settings) -> Error?:
+        @Label[theme_label].text = settings.theme
+        @Label[status_label].text = "Settings saved"
+        return null
+```
+
+Rules:
+
+- A `ui func` runs on its owning window actor.
+- A `ui func` may use local UI refs for its owning window, such as `@Label[theme_label]`.
+- Public cross-window UI updates should be exposed through `pub ui func`.
+- Other windows should not directly mutate another window's components.
+- A `ui func` should not do slow blocking work directly. It should call or await an `async func` for slow work.
+
+Cross-window calls use the existing UI reference form:
+
+```python
+@Window[main].apply_settings(settings)
+```
+
+This call queues work onto the target window actor and returns a `Task`. Awaiting is optional.
+
+Fire-and-forget:
+
+```python
+func save_clicked():
+    settings, err = collect_settings()
+    if err != null:
+        msg.error(err.message)
+        return
+
+    @Window[main].apply_settings(settings)
+    window.close(@Window[settings])
+```
+
+Awaiting completion:
+
+```python
+func save_clicked():
+    settings, err = collect_settings()
+    if err != null:
+        msg.error(err.message)
+        return
+
+    task = @Window[main].apply_settings(settings)
+    err = await task
+    if err != null:
+        msg.error(err.message)
+        return
+
+    window.close(@Window[settings])
+```
+
+---
+
+## await
+
+`await` suspends the current continuation without blocking the window actor.
+
+```python
+func load_clicked():
+    @Label[status_label].text = "Loading..."
+
+    task = load_settings("./settings.json")
+    settings, err = await task
+
+    if err != null:
+        msg.error(err.message)
+        @Label[status_label].text = "Load failed"
+        return
+
+    @Window[main].apply_settings(settings)
+    @Label[status_label].text = "Loaded"
+```
+
+`await` yields normal result values plus trailing `Error?`.
+
+```python
+task: Task<int> = count_files("./data")
+count, err = await task
+```
+
+For an `async func` that only returns `Error?`, awaiting yields just the error value.
+
+```python
+async func save_settings_to_disk(settings: Settings) -> Error?:
+    text, err = json.stringify<Settings>(settings)
+    if err != null:
+        return err
+
+    return file.write_text("./settings.json", text)
+
+err = await save_settings_to_disk(settings)
+```
+
+There are no exceptions, thrown errors, or hidden propagation.

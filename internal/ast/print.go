@@ -63,7 +63,7 @@ func (p *printer) node(node Node, indent int) {
 			p.node(n.Value, indent+2)
 		}
 	case *FuncDecl:
-		p.line(indent, "FuncDecl name=%s pub=%t", n.Name, n.Pub)
+		p.line(indent, "FuncDecl name=%s pub=%t async=%t ui=%t", n.Name, n.Pub, n.Async, n.UI)
 		for _, param := range n.Params {
 			p.line(indent+1, "Param name=%s type=%s ref=%t", param.Name, typeString(param.Type), param.Ref)
 		}
@@ -262,6 +262,9 @@ func (p *printer) node(node Node, indent int) {
 		p.patterns(n.Patterns, indent+1)
 		p.line(indent+1, "Value:")
 		p.node(n.Value, indent+2)
+	case *AwaitExpr:
+		p.line(indent, "AwaitExpr")
+		p.node(n.X, indent+1)
 	case *BadExpr:
 		p.line(indent, "BadExpr")
 	case TypeExpr:

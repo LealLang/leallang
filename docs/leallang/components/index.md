@@ -65,12 +65,131 @@ window.open(@Window[settings])
 window.close(@Window[settings])
 ```
 
+Opening a window starts that window's actor and returns immediately. It does not block the calling window.
+
 Windows are usually exposed through public functions.
 
 ```python
 pub func open():
     window.open(@Window[settings])
 ```
+
+---
+
+## Window Actors
+
+Each `Window[...]` owns a UI actor. A UI actor is the serialized event queue for one window. It runs that window's event handlers, local UI updates, and `ui func` calls.
+
+If one window runs slow synchronous code in one of its handlers, only that window's actor is blocked. Other windows keep processing their own events because they have separate actors.
+
+```python
+Window[main]("Main"):
+    Button[open_settings]("Settings", click: open_settings_clicked)
+
+Window[settings]("Settings"):
+    Button[save_button]("Save", click: save_settings_clicked)
+```
+
+If `save_settings_clicked` runs slow code, only the Settings window is blocked. The Main window keeps responding.
+
+---
+
+## Window-owned ui func
+
+A `ui func` is a UI-facing function owned by a specific window. It is declared inside the owning `Window[...]` block.
+
+```python
+Window[main]("App"):
+    Label[theme_label]("Light")
+
+    pub ui func apply_settings(settings: Settings) -> Error?:
+        @Label[theme_label].text = settings.theme
+        return null
+```
+
+Rules:
+
+- A `ui func` runs on its owning window actor.
+- A `ui func` may use local UI refs for its owning window, such as `@Label[theme_label]`.
+- Public cross-window UI updates should be exposed through `pub ui func`.
+- Other windows should not directly mutate another window's components.
+
+### Cross-window Calls
+
+Cross-window calls use the `@Window[id].ui_func(args)` form:
+
+```python
+@Window[main].apply_settings(settings)
+```
+
+This queues work onto the target window actor. The call returns a `Task`. Awaiting is optional.
+
+Fire-and-forget:
+
+```python
+func save_clicked():
+    settings, err = collect_settings()
+    if err != null:
+        msg.error(err.message)
+        return
+
+    @Window[main].apply_settings(settings)
+    window.close(@Window[settings])
+```
+
+Awaiting completion:
+
+```python
+func save_clicked():
+    settings, err = collect_settings()
+    if err != null:
+        msg.error(err.message)
+        return
+
+    task = @Window[main].apply_settings(settings)
+    err = await task
+    if err != null:
+        msg.error(err.message)
+        return
+
+    window.close(@Window[settings])
+```
+
+---
+
+## Cross-window Communication
+
+For the first version, the main window owns shared application state. Secondary windows keep local draft state and send validated changes to Main through `pub ui func`s.
+
+```python
+type Settings:
+    pub theme: string
+    pub autosave: bool
+
+Window[main]("App"):
+    pub ui func apply_settings(settings: Settings) -> Error?:
+        app_settings = settings
+        @Label[theme_label].text = settings.theme
+        return null
+
+Window[settings]("Settings"):
+    Button[save_button]("Save", click: save_settings_clicked)
+
+func save_settings_clicked():
+    settings, err = collect_settings()
+    if err != null:
+        msg.error(err.message)
+        return
+
+    err = await @Window[main].apply_settings(settings)
+    if err != null:
+        msg.error(err.message)
+        return
+
+    window.close(@Window[settings])
+```
+
+This avoids global mutable state shared by multiple windows.
 
 ---
 

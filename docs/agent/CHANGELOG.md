@@ -4,7 +4,40 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] - 28-05-2026
+## [0] - 31-05-2026
+
+### Added
+
+- Integrated threading/concurrency design into language spec:
+  - `docs/leallang/functions/index.md`: `async func`, `ui func`, `await` sections with safety rules
+  - `docs/leallang/core/types.md`: `Task<T>` type and sendable value rules for task boundaries
+  - `docs/leallang/core/expressions.md`: `await` expressions and cross-window `@Window[id].ui_func()` calls
+  - `docs/leallang/components/index.md`: window actors, window-owned `ui func` declarations, cross-window communication patterns
+  - `docs/leallang/components/events.md`: async event handlers that may suspend at `await`
+  - `docs/leallang/builtins/window.md`: non-blocking `window.open`, close cancellation behavior, concurrency error codes (`window_closed`, `task_cancelled`, `task_failed`)
+
+### Implemented
+
+- Threading/concurrency compiler support across all layers:
+  - `internal/token/token.go`: `ASYNC`, `AWAIT`, `UI` keyword tokens
+  - `internal/ast/ast.go`: `AwaitExpr` node, `Async`/`UI` flags on `FuncDecl`
+  - `internal/ast/print.go`: updated pretty-printer for new nodes
+  - `internal/parser/parser.go`: `async func`, `ui func`, `await` expressions, `Task<T>` generic type annotations
+  - `internal/checker/types.go`: `Async`/`UI` fields on `FuncSignature`
+  - `internal/checker/builtins.go`: `Task` generic type sentinel registration
+  - `internal/checker/checker.go`: async-safety enforcement (E060-E064), `await` expression checking, `Task<T>` return wrapping for async calls
+  - `internal/interpreter/value.go`: `TaskVal` with channel-based signaling (`newTaskVal`, `resolve`, `await`), `Async`/`UI` on `FuncVal`
+  - `internal/interpreter/interpreter.go`: async func spawns goroutine and returns `TaskVal` immediately, `await` blocks until task completes
+
+### Fixed
+
+- `internal/checker/checker.go`: `asyncPayloadType` now checks `RecordType.Name == "Error"` instead of matching any `RecordType` when stripping trailing `Error?` from async return tuples
+
+## [0] - 30-05-2026
+
+- Added `docs/superpowers/specs/2026-05-31-threading-concurrency-design.md` documenting the proposed first threading/concurrency model: per-window UI actors, window-owned `ui func`s, `async func` tasks, `await`, sendable task boundaries, and cancel-on-close lifecycle semantics.
+
+## [0] - 28-05-2026
 
 ### Fixed
 

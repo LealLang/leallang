@@ -85,10 +85,19 @@ type FuncSignature struct {
 	Params     []*ParamInfo
 	ReturnType Type // nil for void, TupleType for multi-return
 	Pub        bool
+	Async      bool
+	UI         bool
 }
 
 func (t *FuncSignature) typeKey() string {
-	s := "func(" + paramKeys(t.Params) + ")"
+	s := "func"
+	if t.Async {
+		s += ":async"
+	}
+	if t.UI {
+		s += ":ui"
+	}
+	s += "(" + paramKeys(t.Params) + ")"
 	if t.ReturnType != nil {
 		s += "->" + t.ReturnType.typeKey()
 	}
@@ -96,7 +105,14 @@ func (t *FuncSignature) typeKey() string {
 }
 
 func (t *FuncSignature) String() string {
-	s := "func " + t.Name + "(" + paramString(t.Params) + ")"
+	prefix := "func"
+	if t.Async {
+		prefix = "async func"
+	}
+	if t.UI {
+		prefix = "ui func"
+	}
+	s := prefix + " " + t.Name + "(" + paramString(t.Params) + ")"
 	if t.ReturnType != nil {
 		s += " -> " + t.ReturnType.String()
 	}

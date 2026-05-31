@@ -57,6 +57,32 @@ toast.show(message: "Saved", 3)        # invalid
 
 Component declarations have stricter positional argument rules. See [Components](../components/index.md).
 
+## Async Calls and await
+
+Calling an `async func` returns a `Task` immediately.
+
+```python
+task = load_settings("./settings.json")
+```
+
+`await` suspends the current continuation and yields the task's result values plus `Error?`.
+
+```python
+settings, err = await task
+```
+
+Direct await on an async call:
+
+```python
+settings, err = await load_settings("./settings.json")
+```
+
+For an `async func` that only returns `Error?`:
+
+```python
+err = await save_to_disk(data)
+```
+
 ## Generic Types and Calls
 
 Generic types use angle brackets.
@@ -107,6 +133,29 @@ UI references use `@` and refer to windows or components in the UI tree.
 ```
 
 Component IDs are not normal variables. They are identifiers inside the UI tree and are accessed through `@` references.
+
+### Cross-window UI Calls
+
+Calls to a window's `ui func` use the `@Window[id].ui_func(args)` form. This queues work onto the target window actor and returns a `Task`.
+
+```python
+task = @Window[main].apply_settings(settings)
+err = await task
+```
+
+Fire-and-forget (no await):
+
+```python
+@Window[main].apply_settings(settings)
+window.close(@Window[settings])
+```
+
+Awaiting a `ui func` that returns values:
+
+```python
+task = @Window[main].current_theme()
+theme, err = await task
+```
 
 ## Component Declarations
 

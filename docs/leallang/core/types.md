@@ -465,6 +465,41 @@ value, _ = cache.get("theme")
 
 ---
 
+## Task
+
+A `Task` represents a pending async operation created by calling an `async func`.
+
+```python
+task: Task<int> = count_files("./data")
+count, err = await task
+```
+
+When the `async func` returns only `Error?`, the task has no generic parameter.
+
+```python
+task: Task = save_to_disk(data)
+err = await task
+```
+
+### Task-boundary Rules
+
+Values crossing into or out of an async task must be sendable. Lists and dictionaries remain reference types inside one actor, but task boundaries deep-copy or freeze them so background work cannot race UI code.
+
+```python
+func start_import_clicked():
+    files = selected_files()
+
+    # `files` is copied into the task boundary.
+    task = import_files(files)
+
+    # Mutating local UI/window state later does not race the task.
+    files.clear()
+
+    count, err = await task
+```
+
+---
+
 ## Strings and Interpolation
 
 String interpolation uses `$"..."`.
