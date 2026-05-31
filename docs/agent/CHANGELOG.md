@@ -26,8 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `internal/checker/types.go`: `Async`/`UI` fields on `FuncSignature`
   - `internal/checker/builtins.go`: `Task` generic type sentinel registration
   - `internal/checker/checker.go`: async-safety enforcement (E060-E064), `await` expression checking, `Task<T>` return wrapping for async calls
-  - `internal/interpreter/value.go`: `TaskVal` runtime value, `Async`/`UI` on `FuncVal`
-  - `internal/interpreter/interpreter.go`: async func returns `TaskVal`, `await` unwraps `TaskVal`
+  - `internal/interpreter/value.go`: `TaskVal` with channel-based signaling (`newTaskVal`, `resolve`, `await`), `Async`/`UI` on `FuncVal`
+  - `internal/interpreter/interpreter.go`: async func spawns goroutine and returns `TaskVal` immediately, `await` blocks until task completes
 
 ### Fixed
 

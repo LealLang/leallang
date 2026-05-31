@@ -140,7 +140,7 @@ func (interp *Interpreter) evalExpr(expr ast.Expr, env *Env) (Value, error) {
 			return nil, err
 		}
 		if task, ok := val.(*TaskVal); ok {
-			return task.Result, nil
+			return task.await(), nil
 		}
 		return val, nil
 	case *ast.CallExpr:
@@ -273,6 +273,26 @@ func (interp *Interpreter) callFuncWithRefs(fn Value, args []Value, refArgs []*c
 		if err != nil {
 			return nil, err
 		}
+		if f.Async {
+			task := newTaskVal()
+			go func() {
+				sig, callErr := interp.evalBlock(f.Body, callEnv)
+				var result Value
+				if callErr != nil {
+					result = errorRecord(callErr.Error(), "task_failed")
+				} else if sig != nil {
+					if sig.Kind == signalReturn {
+						result = sig.Value
+					} else {
+						result = Null
+					}
+				} else {
+					result = Null
+				}
+				task.resolve(result)
+			}()
+			return task, nil
+		}
 		sig, err := interp.evalBlock(f.Body, callEnv)
 		if err != nil {
 			return nil, err
@@ -285,9 +305,6 @@ func (interp *Interpreter) callFuncWithRefs(fn Value, args []Value, refArgs []*c
 			result = sig.Value
 		} else {
 			result = Null
-		}
-		if f.Async {
-			return &TaskVal{Result: result}, nil
 		}
 		return result, nil
 	case *BoundMethodVal:

@@ -214,14 +214,31 @@ type ComponentRefVal struct {
 func (v *ComponentRefVal) Type() string   { return v.Component }
 func (v *ComponentRefVal) String() string { return "@" + v.Component + "[" + v.ID + "]" }
 
-// TaskVal represents a resolved async task.
+// TaskVal represents an async task that may still be running.
 type TaskVal struct {
 	Result Value
+	done   chan struct{}
+}
+
+func newTaskVal() *TaskVal {
+	return &TaskVal{done: make(chan struct{})}
 }
 
 func (v *TaskVal) Type() string { return "Task" }
 func (v *TaskVal) String() string {
-	return fmt.Sprintf("<task %s>", valueString(v.Result))
+	return "<task>"
+}
+
+// resolve sets the result and signals completion.
+func (v *TaskVal) resolve(result Value) {
+	v.Result = result
+	close(v.done)
+}
+
+// await blocks until the task completes and returns the result.
+func (v *TaskVal) await() Value {
+	<-v.done
+	return v.Result
 }
 
 func valueString(v Value) string {
