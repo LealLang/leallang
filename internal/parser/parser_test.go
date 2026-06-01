@@ -522,7 +522,7 @@ func TestErrorConstRequiresValue(t *testing.T) {
 
 const X: int
 `)
-	requireErrorCode(t, diag, "E013")
+	requireErrorCode(t, diag, "E085")
 }
 
 func TestErrorInvalidAssignmentTarget(t *testing.T) {
@@ -835,7 +835,7 @@ func TestOnOutsideComponentBlock(t *testing.T) {
 func main():
     on click = handle_save
 `)
-	requireErrorCode(t, diag, "E013")
+	requireErrorCode(t, diag, "E089")
 }
 
 func TestUIFuncInsideWindowBlock(t *testing.T) {
@@ -891,7 +891,7 @@ ui func view():
     Col[root]:
         gap = 12
 `)
-	requireErrorCode(t, diag, "E013")
+	requireErrorCode(t, diag, "E081")
 }
 
 func TestUIFuncInsideNonWindowComponent(t *testing.T) {
@@ -906,5 +906,5 @@ Window[main]:
         ui func bad():
             console.print_ln("nope")
 `)
-	requireErrorCode(t, diag, "E013")
+	requireErrorCode(t, diag, "E081")
 }

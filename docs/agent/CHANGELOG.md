@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Deduplicated error code `E013` which was used as a catch-all for 17+ distinct errors across parser and checker:
+  - `internal/parser/parser.go`: Assigned unique codes E080–E095 for parser-specific errors (async/ui mutual exclusion, ui func outside Window, expected tokens, component block validation, interpolation, etc.)
+  - `internal/checker/checker.go`: Assigned E075 (component reference outside ui func) and E076 (component declaration outside ui function)
+  - `internal/parser/parser_test.go`: Updated 5 test expectations to use new codes
+  - `internal/checker/checker_test.go`: Updated 2 test expectations to use new codes
 - Parser infinite loop when bare `func` appears inside component blocks:
   - `internal/parser/parser.go`: `synchronize()` now advances past stop-tokens when `previous` is NEWLINE, preventing the error-recovery loop from getting stuck at the same token position
   - `internal/parser/parser.go`: `parseComponentDecl()` now handles bare `func` declarations inside Window blocks (alongside `ui func`), storing them in `comp.Funcs` with `UI: false`

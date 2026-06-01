@@ -112,7 +112,7 @@ func (c *Checker) checkDecls(program *ast.Program) {
 func (c *Checker) checkComponentDeclTopLevel(decl *ast.ComponentDecl) {
 	// Only Window is allowed at the top level.
 	if decl.Component != "Window" {
-		c.error(decl.CompPos, 0, "E013", "component declaration outside ui function", "only Window[...] is allowed at the top level; other components must be inside ui func bodies")
+		c.error(decl.CompPos, 0, "E076", "component declaration outside ui function", "only Window[...] is allowed at the top level; other components must be inside ui func bodies")
 		return
 	}
 
@@ -1283,7 +1283,7 @@ func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
 	// Component refs are only allowed inside ui func bodies.
 	// Exception: @Window[id] is allowed as a value (e.g., window.open(@Window[id])).
 	if !c.inUIFunc && cr.Component != "Window" {
-		c.error(cr.AtPos, 0, "E013", "component reference outside ui func", "@Component[id] syntax is only allowed inside ui func bodies; use @Window[id].func() for cross-window calls")
+		c.error(cr.AtPos, 0, "E075", "component reference outside ui func", "@Component[id] syntax is only allowed inside ui func bodies; use @Window[id].func() for cross-window calls")
 		return nil
 	}
 	// Component refs are validated when we have a component registry.
@@ -1300,7 +1300,7 @@ func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
 // checkComponentDecl checks a UI component declaration.
 func (c *Checker) checkComponentDecl(decl *ast.ComponentDecl) {
 	if !c.inUIFunc {
-		c.error(decl.CompPos, 0, "E013", "component declaration outside ui function", "component declarations are only allowed inside ui func bodies")
+		c.error(decl.CompPos, 0, "E076", "component declaration outside ui function", "component declarations are only allowed inside ui func bodies")
 		return
 	}
 

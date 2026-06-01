@@ -903,7 +903,7 @@ async ui func bad():
 func main():
     pass
 `)
-	requireErrorCode(t, diag, "E013")
+	requireErrorCode(t, diag, "E080")
 }
 
 func TestAsyncComponentRefRejected(t *testing.T) {
@@ -1101,12 +1101,12 @@ Window[main]:
 
 func TestComponentOnlyInUIFunc(t *testing.T) {
 	// Component declarations are only valid inside ui func bodies.
-	// The parser will reject them in non-ui blocks with E013.
+	// The parser will reject them in non-ui blocks with E091.
 	_, diag := parseSource(t, `package app.main
 
 func view():
     Window[main]:
         title = "App"
 `)
-	requireErrorCode(t, diag, "E013")
+	requireErrorCode(t, diag, "E091")
 }
