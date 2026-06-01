@@ -11,11 +11,25 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/LealLang/leallang/internal/ast"
 	"github.com/LealLang/leallang/internal/diagnostics"
 	"github.com/LealLang/leallang/internal/token"
 )
+
+// syncWriter wraps an io.Writer with a mutex for safe concurrent use.
+// This is needed because async tasks share the parent's stdout/stderr writers.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (sw *syncWriter) Write(p []byte) (int, error) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	return sw.w.Write(p)
+}
 
 const maxCallDepth = 1000
 
@@ -43,8 +57,8 @@ func New(diag *diagnostics.Diagnostics) *Interpreter {
 }
 
 func (interp *Interpreter) SetOutput(stdout, stderr io.Writer) {
-	interp.stdout = discardWriter(stdout)
-	interp.stderr = discardWriter(stderr)
+	interp.stdout = &syncWriter{w: discardWriter(stdout)}
+	interp.stderr = &syncWriter{w: discardWriter(stderr)}
 }
 
 func (interp *Interpreter) SetArgs(args []string) {
@@ -53,6 +67,41 @@ func (interp *Interpreter) SetArgs(args []string) {
 
 func (interp *Interpreter) ExitCode() int {
 	return interp.exitCode
+}
+
+// NewChild creates a child interpreter for an async task. The child has its own
+// mutable execution state (globals, callDepth, diag, builtins) but shares
+// read-only program metadata (types, args) and writers (stdout, stderr) with
+// the parent. Builtins are re-registered on the child so they close over the
+// child interpreter. FuncVal entries in taskEnv are cloned with closures
+// re-bound to taskEnv so they do not reach into the caller's scope chain.
+func (interp *Interpreter) NewChild(taskEnv *Env) *Interpreter {
+	// Clone FuncVal entries and rebind closures to the task environment.
+	for name, c := range taskEnv.vars {
+		if fv, ok := c.value.(*FuncVal); ok {
+			taskEnv.vars[name] = &cell{
+				value: &FuncVal{
+					Name:    fv.Name,
+					Params:  fv.Params,
+					Body:    fv.Body,
+					Closure: taskEnv,
+					Async:   fv.Async,
+					UI:      fv.UI,
+				},
+				constBind: c.constBind,
+			}
+		}
+	}
+	child := &Interpreter{
+		diag:    diagnostics.New(),
+		globals: taskEnv,
+		types:   interp.types, // read-only after init
+		stdout:  interp.stdout,
+		stderr:  interp.stderr,
+		args:    interp.args, // read-only after init
+	}
+	child.registerBuiltins()
+	return child
 }
 
 func (interp *Interpreter) Run(program *ast.Program) error {
@@ -140,7 +189,8 @@ func (interp *Interpreter) evalExpr(expr ast.Expr, env *Env) (Value, error) {
 			return nil, err
 		}
 		if task, ok := val.(*TaskVal); ok {
-			return task.await(), nil
+			result, taskErr := task.await()
+			return &TupleVal{Elements: []Value{result, taskErr}}, nil
 		}
 		return val, nil
 	case *ast.CallExpr:
@@ -269,29 +319,40 @@ func (interp *Interpreter) callFuncWithRefs(fn Value, args []Value, refArgs []*c
 	case *BuiltinVal:
 		return f.Fn(args)
 	case *FuncVal:
+		if f.Async {
+			// Clone arguments for sendable boundary.
+			clonedArgs := make([]Value, len(args))
+			for i, arg := range args {
+				cloned, err := cloneForTask(arg)
+				if err != nil {
+					return nil, err
+				}
+				clonedArgs[i] = cloned
+			}
+			// Build isolated child environment from globals snapshot.
+			taskEnv := interp.globals.SnapshotGlobals()
+			child := interp.NewChild(taskEnv)
+			// Bind cloned args against child globals (not caller's closure).
+			callEnv, err := child.bindCallEnv(f.Params, clonedArgs, nil, taskEnv, pos)
+			if err != nil {
+				return nil, err
+			}
+			task := newTaskVal()
+			go func() {
+				sig, callErr := child.evalBlock(f.Body, callEnv)
+				if callErr != nil {
+					task.resolve(Null, errorRecord(callErr.Error(), "task_failed"))
+				} else if sig != nil && sig.Kind == signalReturn {
+					task.resolve(sig.Value, Null)
+				} else {
+					task.resolve(Null, Null)
+				}
+			}()
+			return task, nil
+		}
 		callEnv, err := interp.bindCallEnv(f.Params, args, refArgs, f.Closure, pos)
 		if err != nil {
 			return nil, err
-		}
-		if f.Async {
-			task := newTaskVal()
-			go func() {
-				sig, callErr := interp.evalBlock(f.Body, callEnv)
-				var result Value
-				if callErr != nil {
-					result = errorRecord(callErr.Error(), "task_failed")
-				} else if sig != nil {
-					if sig.Kind == signalReturn {
-						result = sig.Value
-					} else {
-						result = Null
-					}
-				} else {
-					result = Null
-				}
-				task.resolve(result)
-			}()
-			return task, nil
 		}
 		sig, err := interp.evalBlock(f.Body, callEnv)
 		if err != nil {

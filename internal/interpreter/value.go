@@ -216,7 +216,8 @@ func (v *ComponentRefVal) String() string { return "@" + v.Component + "[" + v.I
 
 // TaskVal represents an async task that may still be running.
 type TaskVal struct {
-	Result Value
+	result Value
+	err    Value // Null on success, Error record on failure
 	done   chan struct{}
 }
 
@@ -229,16 +230,17 @@ func (v *TaskVal) String() string {
 	return "<task>"
 }
 
-// resolve sets the result and signals completion.
-func (v *TaskVal) resolve(result Value) {
-	v.Result = result
+// resolve sets the result and error, then signals completion.
+func (v *TaskVal) resolve(result, err Value) {
+	v.result = result
+	v.err = err
 	close(v.done)
 }
 
-// await blocks until the task completes and returns the result.
-func (v *TaskVal) await() Value {
+// await blocks until the task completes and returns (result, err).
+func (v *TaskVal) await() (Value, Value) {
 	<-v.done
-	return v.Result
+	return v.result, v.err
 }
 
 func valueString(v Value) string {
@@ -456,6 +458,68 @@ func jsonNumberToValue(v any) Value {
 		return &DictVal{Entries: items}
 	default:
 		return goToValue(val)
+	}
+}
+
+// cloneForTask deep-copies sendable values for crossing async task boundaries.
+// Non-sendable values return an error.
+func cloneForTask(v Value) (Value, error) {
+	switch val := v.(type) {
+	// Primitives and immutable values — safe to share.
+	case IntVal, FloatVal, StringVal, BoolVal, CharVal, *NullVal, *EnumVal, *RangeVal:
+		return v, nil
+
+	// Pointer-backed containers — deep-copy recursively.
+	case *TupleVal:
+		elems := make([]Value, len(val.Elements))
+		for i, el := range val.Elements {
+			cloned, err := cloneForTask(el)
+			if err != nil {
+				return nil, err
+			}
+			elems[i] = cloned
+		}
+		return &TupleVal{Elements: elems}, nil
+
+	case *ListVal:
+		elems := make([]Value, len(val.Elements))
+		for i, el := range val.Elements {
+			cloned, err := cloneForTask(el)
+			if err != nil {
+				return nil, err
+			}
+			elems[i] = cloned
+		}
+		return &ListVal{Elements: elems}, nil
+
+	case *DictVal:
+		entries := make(map[string]Value, len(val.Entries))
+		for k, el := range val.Entries {
+			cloned, err := cloneForTask(el)
+			if err != nil {
+				return nil, err
+			}
+			entries[k] = cloned
+		}
+		return &DictVal{Entries: entries}, nil
+
+	case *RecordVal:
+		fields := make(map[string]Value, len(val.Fields))
+		for k, el := range val.Fields {
+			cloned, err := cloneForTask(el)
+			if err != nil {
+				return nil, err
+			}
+			fields[k] = cloned
+		}
+		return &RecordVal{TypeName: val.TypeName, Fields: fields}, nil
+
+	// Non-sendable values — reject.
+	case *FuncVal, *BuiltinVal, *NamespaceVal, *ConstGroupVal, *RecordTypeVal, *BoundMethodVal, *ComponentRefVal, *TaskVal:
+		return nil, fmt.Errorf("value of type %s cannot cross async task boundary", v.Type())
+
+	default:
+		return nil, fmt.Errorf("value of type %s cannot cross async task boundary", v.Type())
 	}
 }
 

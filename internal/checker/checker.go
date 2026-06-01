@@ -530,6 +530,7 @@ func isUIAffineNamespace(name string) bool {
 }
 
 // checkAwaitExpr checks an await expression and returns the unwrapped type.
+// await yields (T, Error?) for Task<T>, or Error? for void Task.
 func (c *Checker) checkAwaitExpr(a *ast.AwaitExpr) Type {
 	innerType := c.checkExpr(a.X)
 	if innerType == nil {
@@ -537,7 +538,14 @@ func (c *Checker) checkAwaitExpr(a *ast.AwaitExpr) Type {
 	}
 	if gt, ok := innerType.(*GenericType); ok && gt.Name == "Task" {
 		if len(gt.Params) == 1 {
-			return gt.Params[0]
+			payload := gt.Params[0]
+			errType := &NullableType{Inner: c.global.Lookup("Error").Type}
+			if _, ok := payload.(*Void); ok {
+				// async func -> Error? only: await yields Error?
+				return errType
+			}
+			// async func -> T, Error?: await yields (T, Error?)
+			return &TupleType{Elements: []Type{payload, errType}}
 		}
 		return nil
 	}
@@ -664,6 +672,7 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 		}
 	case *ast.FieldExpr:
 		// Namespace call, record method call, or component property access
+		c.checkAsyncSafety(fn)
 		baseType := c.checkExpr(fn.X)
 		switch t := baseType.(type) {
 		case *NamespaceType:

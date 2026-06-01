@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0] - 31-05-2026
 
+### Fixed
+
+- Async task runtime isolation: each `async func` now runs on a child `*Interpreter` with its own `globals`, `callDepth`, `exitCode`, `diag`, and `builtins` instead of sharing the parent's mutable state.
+- Async argument cloning: all arguments to `async func` are deep-copied via `cloneForTask` before crossing the task boundary. Lists, dicts, records, and tuples are recursively cloned. Non-sendable values (functions, builtins, namespaces, etc.) are rejected with a clear error.
+- Async closure isolation: `FuncVal` entries in the task environment are cloned with closures re-bound to the task's global snapshot, preventing async tasks from reaching into the caller's local scope chain.
+- `TaskVal` reshaped to store both `result` and `err` (Null on success, Error record on task failure). `resolve(result, err)` and `await() (Value, Value)` signatures.
+- `await` now returns `(T, Error?)` tuple at runtime, aligning with the language spec. Checker's `checkAwaitExpr` updated to return `TupleType{T, Error?}` for `Task<T>` and `Error?` for void tasks.
+- Thread-safe I/O: shared `stdout`/`stderr` writers are wrapped with a `syncWriter` mutex so concurrent async tasks don't race on output.
+- Checker: `checkAsyncSafety` now also runs on `FieldExpr` callees in `checkCallExpr`, fixing E062 detection for `window.open()`, `msg.error()`, etc. inside async functions.
+
+### Added
+
+- `cloneForTask(v Value) (Value, error)` — deep-copies sendable values and rejects non-sendable ones at task boundaries.
+- `(*Interpreter).NewChild(taskEnv *Env) *Interpreter` — creates an isolated child interpreter for async task execution.
+- `(*Env).SnapshotGlobals() *Env` — creates a flat environment containing only top-level bindings.
+- `syncWriter` type for thread-safe concurrent writes to shared I/O writers.
+- 8 interpreter tests for async: returns before completion, concurrent tasks, runtime error propagation, list/dict/record deep-copy, non-sendable rejection, callDepth isolation.
+- 5 checker tests for async: E063 ref param rejection, E062 UI-affine namespace rejection, E064 await non-task rejection, async call returns Task, await returns payload+error.
+
+## [0] - 31-05-2026
+
 ### Added
 
 - Integrated threading/concurrency design into language spec:
