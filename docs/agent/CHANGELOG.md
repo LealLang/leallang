@@ -4,6 +4,79 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0] - 01-06-2026
+
+### Changed
+
+- Split `internal/interpreter/interpreter_test.go` (3,220 lines) into 8 focused test files:
+  - `test_helpers_test.go` (102 lines) — shared test infrastructure (runSource, safeWriter, etc.)
+  - `async_test.go` (506 lines) — 26 tests for async/await, TaskVal, and cloneForTask
+  - `value_test.go` (307 lines) — 11 tests for value types, Signal, JSON conversion
+  - `expressions_test.go` (444 lines) — 35 tests for arithmetic, comparisons, logical ops
+  - `control_flow_test.go` (608 lines) — 41 tests for switch, loops, if/else
+  - `errors_and_builtins_test.go` (458 lines) — 36 tests for runtime errors and builtins
+  - `records_and_functions_test.go` (700 lines) — 45 tests for records, functions, strings
+  - `declarations_test.go` (170 lines) — 12 tests for const declarations and stub namespaces
+
+## [0] - 31-05-2026
+
+### Added
+
+- 15 interpreter tests for async/await and Task behaviors:
+  - 4 TaskVal unit tests: resolve/await, error resolve, type/string, await blocks until resolve
+  - 6 cloneForTask tests: primitives, null/enum, range, tuple deep-copy, nested structures, all non-sendable types rejected
+  - 5 async behavioral tests: void function, nested async calls, globals isolation, record-with-list deep copy, multiple awaits on same task
+- 7 checker tests for async/await:
+  - E013 async+ui mutual exclusion, E061 UI component ref rejection in async
+  - console/file allowed in async (non-UI-affine), async calling async allowed
+  - void async return type handling, await in non-async function on Task
+- ~80 interpreter coverage tests to reach 85% statement coverage:
+  - Value Type()/String() methods for all 20+ value types
+  - valuesEqual for all type combinations (int, float, string, bool, char, null, enum, list, dict, record, tuple, component ref, range)
+  - dictKey for all valid types (string, int, bool, char, enum) and invalid types
+  - valueToGo/goToValue round-trip conversions
+  - decodeJSONValue for all JSON types (null, bool, string, int, float, array, object)
+  - jsonNumberToValue for nested arrays, objects, and default fallback
+  - Signal.Error() for all signal kinds (return, break, continue, unknown)
+  - evalUnary: -int, -float, not bool, error paths
+  - evalLiteral: float, char, bool, null literals
+  - numericBinary: subtraction, multiplication, modulo, float ops, mixed int/float
+  - compareValues: all comparison operators on int and float
+  - evalField: record field access, namespace member, const group member
+  - evalIndex: string index, dict index, index out of bounds
+  - evalAssign: identifier, index, record field, new variable, const reassignment
+  - assignIndex: list and dict index assignment
+  - evalSwitchStmt/evalSwitchExpr: match, no match, wildcard, multiple cases
+  - evalIf: else-if, else branches
+  - evalLoop: step, while, if modifiers, break, continue, dict/list iteration
+  - builtins: file.write_text, file.exists, file.read_text error, json.parse success/error, json.stringify, system.env, system.args, console.print, stub namespace calls (window, msg, modal, toast)
+  - Constructor with explicit body, default field values, partial args
+  - Record methods with arguments, mutation, return values
+  - Ref parameters, nested function calls, recursive functions
+  - Call depth exceeded (E107), const declaration types (int, float, string, bool)
+  - Interpolated strings with expressions, string concatenation
+  - cloneForTask with non-sendable elements in list, dict, tuple containers
+  - discardWriter nil path
+
+### Fixed
+
+- Async task runtime isolation: each `async func` now runs on a child `*Interpreter` with its own `globals`, `callDepth`, `exitCode`, `diag`, and `builtins` instead of sharing the parent's mutable state.
+- Async argument cloning: all arguments to `async func` are deep-copied via `cloneForTask` before crossing the task boundary. Lists, dicts, records, and tuples are recursively cloned. Non-sendable values (functions, builtins, namespaces, etc.) are rejected with a clear error.
+- Async closure isolation: `FuncVal` entries in the task environment are cloned with closures re-bound to the task's global snapshot, preventing async tasks from reaching into the caller's local scope chain.
+- `TaskVal` reshaped to store both `result` and `err` (Null on success, Error record on task failure). `resolve(result, err)` and `await() (Value, Value)` signatures.
+- `await` now returns `(T, Error?)` tuple at runtime, aligning with the language spec. Checker's `checkAwaitExpr` updated to return `TupleType{T, Error?}` for `Task<T>` and `Error?` for void tasks.
+- Thread-safe I/O: shared `stdout`/`stderr` writers are wrapped with a `syncWriter` mutex so concurrent async tasks don't race on output.
+- Checker: `checkAsyncSafety` now also runs on `FieldExpr` callees in `checkCallExpr`, fixing E062 detection for `window.open()`, `msg.error()`, etc. inside async functions.
+
+### Added
+
+- `cloneForTask(v Value) (Value, error)` — deep-copies sendable values and rejects non-sendable ones at task boundaries.
+- `(*Interpreter).NewChild(taskEnv *Env) *Interpreter` — creates an isolated child interpreter for async task execution.
+- `(*Env).SnapshotGlobals() *Env` — creates a flat environment containing only top-level bindings.
+- `syncWriter` type for thread-safe concurrent writes to shared I/O writers.
+- 8 interpreter tests for async: returns before completion, concurrent tasks, runtime error propagation, list/dict/record deep-copy, non-sendable rejection, callDepth isolation.
+- 5 checker tests for async: E063 ref param rejection, E062 UI-affine namespace rejection, E064 await non-task rejection, async call returns Task, await returns payload+error.
+
 ## [0] - 31-05-2026
 
 ### Added

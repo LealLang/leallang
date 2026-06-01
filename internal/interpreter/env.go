@@ -71,3 +71,19 @@ func (e *Env) assignCell(name string, source *cell) bool {
 func (e *Env) bindAlias(name string, source *cell) {
 	e.vars[name] = source
 }
+
+// SnapshotGlobals returns a new flat environment containing copies of all
+// top-level (global) bindings. The snapshot has no parent so async tasks
+// cannot reach into the caller's local scope chain.
+func (e *Env) SnapshotGlobals() *Env {
+	root := e
+	for root.parent != nil {
+		root = root.parent
+	}
+	snap := &Env{vars: make(map[string]*cell, len(root.vars))}
+	for name, c := range root.vars {
+		snap.vars[name] = &cell{value: c.value, constBind: c.constBind}
+	}
+	return snap
+}
+
