@@ -275,7 +275,7 @@ func main():
 	}
 }
 
-// --- Value Type()/String() method coverage ---
+// --- TaskVal unit tests ---
 
 func TestTaskValResolveAndAwait(t *testing.T) {
 	task := newTaskVal()

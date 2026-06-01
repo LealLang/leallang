@@ -490,7 +490,7 @@ func main():
 	}
 }
 
-// --- Builtin coverage tests ---
+// --- Additional control flow tests ---
 
 func TestDictIteration(t *testing.T) {
 	out := runSource(t, `package app.main

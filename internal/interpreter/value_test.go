@@ -22,7 +22,7 @@ func main():
 	}
 }
 
-// --- TaskVal unit tests ---
+// --- Value Type()/String() method coverage ---
 
 func TestValueTypeAndString(t *testing.T) {
 	tests := []struct {
