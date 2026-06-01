@@ -423,6 +423,21 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 			continue
 		}
 
+		// bare func declaration (allowed inside Window for event handlers)
+		if p.check(token.FUNC) {
+			if !isWindow {
+				funcTok := p.peek()
+				p.errorAt(funcTok, "E013", "func is only allowed inside a Window block", "move func inside a Window[...] block")
+				p.parseFuncDecl(false, false, false)
+				continue
+			}
+			fn := p.parseFuncDecl(false, false, false)
+			if fn != nil {
+				comp.Funcs = append(comp.Funcs, fn)
+			}
+			continue
+		}
+
 		// Event binding: on <event> = <handler>
 		if p.check(token.ON) && p.checkNext(token.IDENT) {
 			ev := p.parseEventBinding()
@@ -1128,6 +1143,13 @@ func (p *Parser) skipNewlines() {
 func (p *Parser) synchronize() {
 	for !p.atEnd() {
 		if p.previous().Kind == token.NEWLINE {
+			// If we're already at a stop-token, advance past it to avoid
+			// getting stuck in a loop when the caller can't handle it.
+			switch p.peek().Kind {
+			case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT, token.ON:
+				p.advance()
+				return
+			}
 			return
 		}
 		switch p.peek().Kind {

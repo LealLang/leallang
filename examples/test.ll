@@ -8,6 +8,12 @@ Window[main]:
     ui func handle_save():
         @Label[title].text = "Saved!"
         console.print_ln("Save button clicked")
+    
+    ui func handle_resize():
+        console.print_ln($"Window resized to: {@Window[main].w} {@Window[main].h}")
+
+    func handle_hover():
+        console.print_ln("Button hovered")
 
     Col[root]:
         gap = 12
@@ -18,8 +24,9 @@ Window[main]:
         Button[save_btn]:
             text = "Save"
             on click = handle_save
+            on hover = handle_hover
 
 func main():
-    console.print_ln("Starting LealLang UI...")
-    console.print_ln("UI mounted successfully")
+    window.open(@Window[main])
     @Window[main].handle_save()
+    @Window[main].handle_resize()

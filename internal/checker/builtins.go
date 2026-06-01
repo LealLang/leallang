@@ -141,8 +141,8 @@ func registerNamespaces(global *Scope) {
 	windowNs := &NamespaceType{
 		Name: "window",
 		Members: map[string]*FuncSignature{
-			"open":  {Name: "open", Params: []*ParamInfo{{Name: "ref", Type: AnyType, Ref: true}}},
-			"close": {Name: "close", Params: []*ParamInfo{{Name: "ref", Type: AnyType, Ref: true}}},
+			"open":  {Name: "open", Params: []*ParamInfo{{Name: "window_ref", Type: AnyType}}},
+			"close": {Name: "close", Params: []*ParamInfo{{Name: "window_ref", Type: AnyType}}},
 		},
 	}
 	global.Define(&Symbol{Name: "window", Type: windowNs, Kind: SymNamespace, Pub: true})

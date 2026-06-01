@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.0.1] - 01-06-2026
 
+### Fixed
+
+- Parser infinite loop when bare `func` appears inside component blocks:
+  - `internal/parser/parser.go`: `synchronize()` now advances past stop-tokens when `previous` is NEWLINE, preventing the error-recovery loop from getting stuck at the same token position
+  - `internal/parser/parser.go`: `parseComponentDecl()` now handles bare `func` declarations inside Window blocks (alongside `ui func`), storing them in `comp.Funcs` with `UI: false`
+  - `internal/interpreter/interpreter.go`: `registerComponentFuncs()` uses `fn.UI` instead of hardcoded `true` so bare funcs are registered as non-UI
+- Checker: `@ComponentRef` syntax is now only allowed inside `ui func` bodies:
+  - `internal/checker/checker.go`: `checkComponentRef()` rejects `@Component[id]` when `inUIFunc` is false (except `@Window[id]` which is allowed as a value)
+  - `internal/checker/checker.go`: `checkFieldExpr()` and `checkCallExpr()` handle cross-window calls (`@Window[id].func()`) specially, allowing them even outside `ui func` bodies
+  - `examples/test.ll`: Updated to use `ui func handle_resize()` with `@Window[main].w`/`.h`, added `func handle_hover()` as bare func example, added `window.open(@Window[main])` call in `main()`
+- Checker: `window.open()` and `window.close()` no longer require `ref` parameter:
+  - `internal/checker/builtins.go`: Changed parameter from `{Name: "ref", Type: AnyType, Ref: true}` to `{Name: "window_ref", Type: AnyType}` to match spec syntax `window.open(@Window[id])`
+
 ### Implemented
 
 - First-class UI support as a complete language feature:

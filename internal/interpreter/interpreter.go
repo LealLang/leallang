@@ -896,7 +896,7 @@ func (interp *Interpreter) evalComponentDecl(decl *ast.ComponentDecl, env *Env, 
 // registerComponentFuncs registers ui func declarations from a component tree in the global scope.
 func (interp *Interpreter) registerComponentFuncs(decl *ast.ComponentDecl) {
 	for _, fn := range decl.Funcs {
-		interp.globals.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: interp.globals, UI: true})
+		interp.globals.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: interp.globals, UI: fn.UI})
 	}
 	for _, child := range decl.Children {
 		interp.registerComponentFuncs(child)

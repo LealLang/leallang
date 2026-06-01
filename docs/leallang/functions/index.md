@@ -263,6 +263,31 @@ Cross-window calls use the existing UI reference form:
 
 This call queues work onto the target window actor and returns a `Task`. Awaiting is optional.
 
+---
+
+## func inside Window
+
+Regular (non-UI) functions can also be declared inside a `Window[...]` block. These are local helper functions that are not UI-facing and do not run on the window actor. They are useful for event handlers and internal logic.
+
+```python
+Window[main]:
+    title = "App"
+    on resize = handle_resize
+
+    ui func handle_save():
+        @Label[title].text = "Saved!"
+
+    func handle_resize():
+        console.print_ln("Window resized")
+```
+
+Rules:
+
+- A bare `func` inside a Window block is private to that window.
+- It does not run on the window actor (unlike `ui func`).
+- It cannot use `@ComponentRef[id]` syntax to mutate UI components.
+- It can be used as an event handler via `on event = handler_name`.
+
 Fire-and-forget:
 
 ```python

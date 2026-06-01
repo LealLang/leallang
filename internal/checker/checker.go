@@ -898,6 +898,27 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 	case *ast.FieldExpr:
 		// Namespace call, record method call, or component property access
 		c.checkAsyncSafety(fn)
+
+		// Handle cross-window calls: @Window[id].ui_func(args)
+		// This is allowed even outside ui func bodies.
+		if compRef, ok := fn.X.(*ast.ComponentRefExpr); ok {
+			if compRef.Component == "Window" {
+				if methods, exists := c.windowMethods[compRef.ID]; exists && methods[fn.Field] {
+					sym := c.global.Lookup(fn.Field)
+					if sym != nil {
+						if s, ok := sym.Type.(*FuncSignature); ok {
+							sig = s
+						}
+					}
+					if sig == nil {
+						c.error(fn.Dot, 0, "E039", fmt.Sprintf("window '%s' has no ui func '%s'", compRef.ID, fn.Field), "")
+						return nil
+					}
+					break
+				}
+			}
+		}
+
 		baseType := c.checkExpr(fn.X)
 		switch t := baseType.(type) {
 		case *NamespaceType:
@@ -919,19 +940,6 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 				calleeType = prop.Type
 			} else if t.Primary != nil && t.Primary.Name == fn.Field {
 				calleeType = t.Primary.Type
-			} else if compRef, ok := fn.X.(*ast.ComponentRefExpr); ok {
-				// Check if the field is a ui func method on this window instance.
-				if methods, exists := c.windowMethods[compRef.ID]; exists && methods[fn.Field] {
-					sym := c.global.Lookup(fn.Field)
-					if sym != nil {
-						if s, ok := sym.Type.(*FuncSignature); ok {
-							sig = s
-						}
-					}
-				}
-				if sig == nil {
-					calleeType = baseType
-				}
 			} else {
 				calleeType = baseType
 			}
@@ -1077,6 +1085,32 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 
 // checkFieldExpr checks obj.field.
 func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
+	// Handle cross-window field access: @Window[id].field
+	// This is allowed even outside ui func bodies.
+	if compRef, ok := f.X.(*ast.ComponentRefExpr); ok {
+		if compRef.Component == "Window" {
+			if sym := c.global.Lookup(compRef.Component); sym != nil {
+				if ct, ok := sym.Type.(*ComponentType); ok {
+					if prop, ok := ct.Properties[f.Field]; ok {
+						return prop.Type
+					}
+					if ct.Primary != nil && ct.Primary.Name == f.Field {
+						return ct.Primary.Type
+					}
+					// Check if it's a ui func method.
+					if methods, exists := c.windowMethods[compRef.ID]; exists && methods[f.Field] {
+						methodSym := c.global.Lookup(f.Field)
+						if methodSym != nil {
+							return methodSym.Type
+						}
+					}
+					c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", compRef.Component, f.Field), "")
+					return nil
+				}
+			}
+		}
+	}
+
 	base := c.checkExpr(f.X)
 	if base == nil {
 		return nil
@@ -1246,6 +1280,12 @@ func (c *Checker) checkSwitchExpr(s *ast.SwitchExpr) Type {
 
 // checkComponentRef checks a @Component[id] reference.
 func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
+	// Component refs are only allowed inside ui func bodies.
+	// Exception: @Window[id] is allowed as a value (e.g., window.open(@Window[id])).
+	if !c.inUIFunc && cr.Component != "Window" {
+		c.error(cr.AtPos, 0, "E013", "component reference outside ui func", "@Component[id] syntax is only allowed inside ui func bodies; use @Window[id].func() for cross-window calls")
+		return nil
+	}
 	// Component refs are validated when we have a component registry.
 	// For now, look up the component type by name.
 	if sym := c.global.Lookup(cr.Component); sym != nil {
