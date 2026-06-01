@@ -656,11 +656,11 @@ func (c *ComponentRefExpr) End() token.Position {
 }
 func (c *ComponentDecl) Pos() token.Position { return c.CompPos }
 func (c *ComponentDecl) End() token.Position {
-	if len(c.Funcs) > 0 {
-		return c.Funcs[len(c.Funcs)-1].End()
-	}
 	if len(c.Children) > 0 {
 		return c.Children[len(c.Children)-1].End()
+	}
+	if len(c.Funcs) > 0 {
+		return c.Funcs[len(c.Funcs)-1].End()
 	}
 	if len(c.Events) > 0 {
 		return c.Events[len(c.Events)-1].End()

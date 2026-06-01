@@ -880,7 +880,7 @@ func (interp *Interpreter) evalComponentDecl(decl *ast.ComponentDecl, env *Env, 
 
 	// Register ui func declarations.
 	for _, fn := range decl.Funcs {
-		env.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: env, UI: true})
+		env.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: env, UI: fn.UI})
 	}
 
 	// Recurse into children.

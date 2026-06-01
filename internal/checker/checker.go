@@ -77,7 +77,9 @@ func (c *Checker) collectComponentDecls(decl *ast.ComponentDecl) {
 		methods := make(map[string]bool)
 		for _, fn := range decl.Funcs {
 			c.collectFuncDecl(fn)
-			methods[fn.Name] = true
+			if fn.UI {
+				methods[fn.Name] = true
+			}
 		}
 		c.windowMethods[decl.ID] = methods
 	} else {
@@ -87,6 +89,71 @@ func (c *Checker) collectComponentDecls(decl *ast.ComponentDecl) {
 	}
 	for _, child := range decl.Children {
 		c.collectComponentDecls(child)
+	}
+}
+
+// validateComponentProps validates properties against a component type definition.
+func (c *Checker) validateComponentProps(ct *ComponentType, props []*ast.ComponentProp, componentName string) {
+	for _, prop := range props {
+		propInfo, exists := ct.Properties[prop.Name]
+		if !exists {
+			if ct.Primary != nil && ct.Primary.Name == prop.Name {
+				propInfo = ct.Primary
+			} else {
+				c.error(prop.PropPos, 0, "E072",
+					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, componentName),
+					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
+				continue
+			}
+		}
+		valType := c.checkExpr(prop.Value)
+		if valType != nil && !IsAssignable(valType, propInfo.Type) {
+			c.error(prop.Value.Pos(), 0, "E022",
+				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
+				"")
+		}
+	}
+}
+
+// validateComponentEvents validates event bindings against a component type definition.
+func (c *Checker) validateComponentEvents(ct *ComponentType, events []*ast.EventBinding, componentName string) {
+	for _, ev := range events {
+		eventType, exists := ct.Events[ev.Event]
+		if !exists {
+			c.error(ev.OnPos, 0, "E073",
+				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, componentName),
+				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
+			continue
+		}
+		handlerIdent, ok := ev.Handler.(*ast.Ident)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
+			continue
+		}
+		handlerSym := c.scope.Lookup(handlerIdent.Name)
+		if handlerSym == nil {
+			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
+			continue
+		}
+		handlerSig, ok := handlerSym.Type.(*FuncSignature)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) > 1 {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) == 1 {
+			paramType := handlerSig.Params[0].Type
+			if !IsAssignable(eventType, paramType) {
+				c.error(ev.Handler.Pos(), 0, "E074",
+					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
+						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
+			}
+		}
 	}
 }
 
@@ -136,66 +203,9 @@ func (c *Checker) checkComponentDeclTopLevel(decl *ast.ComponentDecl) {
 		return
 	}
 
-	// Validate properties.
-	for _, prop := range decl.Props {
-		propInfo, exists := ct.Properties[prop.Name]
-		if !exists {
-			if ct.Primary != nil && ct.Primary.Name == prop.Name {
-				propInfo = ct.Primary
-			} else {
-				c.error(prop.PropPos, 0, "E072",
-					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, decl.Component),
-					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
-				continue
-			}
-		}
-		valType := c.checkExpr(prop.Value)
-		if valType != nil && !IsAssignable(valType, propInfo.Type) {
-			c.error(prop.Value.Pos(), 0, "E022",
-				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
-				"")
-		}
-	}
-
-	// Validate event bindings.
-	for _, ev := range decl.Events {
-		eventType, exists := ct.Events[ev.Event]
-		if !exists {
-			c.error(ev.OnPos, 0, "E073",
-				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, decl.Component),
-				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
-			continue
-		}
-		handlerIdent, ok := ev.Handler.(*ast.Ident)
-		if !ok {
-			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
-			continue
-		}
-		handlerSym := c.scope.Lookup(handlerIdent.Name)
-		if handlerSym == nil {
-			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
-			continue
-		}
-		handlerSig, ok := handlerSym.Type.(*FuncSignature)
-		if !ok {
-			c.error(ev.Handler.Pos(), 0, "E074",
-				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
-			continue
-		}
-		if len(handlerSig.Params) > 1 {
-			c.error(ev.Handler.Pos(), 0, "E074",
-				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
-			continue
-		}
-		if len(handlerSig.Params) == 1 {
-			paramType := handlerSig.Params[0].Type
-			if !IsAssignable(eventType, paramType) {
-				c.error(ev.Handler.Pos(), 0, "E074",
-					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
-						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
-			}
-		}
-	}
+	// Validate properties and events.
+	c.validateComponentProps(ct, decl.Props, decl.Component)
+	c.validateComponentEvents(ct, decl.Events, decl.Component)
 
 	// Check ui func declarations inside the Window.
 	for _, fn := range decl.Funcs {
@@ -231,64 +241,8 @@ func (c *Checker) checkComponentDeclInWindow(decl *ast.ComponentDecl) {
 		return
 	}
 
-	for _, prop := range decl.Props {
-		propInfo, exists := ct.Properties[prop.Name]
-		if !exists {
-			if ct.Primary != nil && ct.Primary.Name == prop.Name {
-				propInfo = ct.Primary
-			} else {
-				c.error(prop.PropPos, 0, "E072",
-					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, decl.Component),
-					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
-				continue
-			}
-		}
-		valType := c.checkExpr(prop.Value)
-		if valType != nil && !IsAssignable(valType, propInfo.Type) {
-			c.error(prop.Value.Pos(), 0, "E022",
-				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
-				"")
-		}
-	}
-
-	for _, ev := range decl.Events {
-		eventType, exists := ct.Events[ev.Event]
-		if !exists {
-			c.error(ev.OnPos, 0, "E073",
-				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, decl.Component),
-				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
-			continue
-		}
-		handlerIdent, ok := ev.Handler.(*ast.Ident)
-		if !ok {
-			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
-			continue
-		}
-		handlerSym := c.scope.Lookup(handlerIdent.Name)
-		if handlerSym == nil {
-			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
-			continue
-		}
-		handlerSig, ok := handlerSym.Type.(*FuncSignature)
-		if !ok {
-			c.error(ev.Handler.Pos(), 0, "E074",
-				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
-			continue
-		}
-		if len(handlerSig.Params) > 1 {
-			c.error(ev.Handler.Pos(), 0, "E074",
-				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
-			continue
-		}
-		if len(handlerSig.Params) == 1 {
-			paramType := handlerSig.Params[0].Type
-			if !IsAssignable(eventType, paramType) {
-				c.error(ev.Handler.Pos(), 0, "E074",
-					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
-						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
-			}
-		}
-	}
+	c.validateComponentProps(ct, decl.Props, decl.Component)
+	c.validateComponentEvents(ct, decl.Events, decl.Component)
 
 	for _, child := range decl.Children {
 		c.checkComponentDeclInWindow(child)
@@ -1325,72 +1279,9 @@ func (c *Checker) checkComponentDecl(decl *ast.ComponentDecl) {
 	}
 	c.componentIDs[decl.ID] = decl.CompPos
 
-	// Validate properties.
-	for _, prop := range decl.Props {
-		// Check if it's a regular property.
-		propInfo, exists := ct.Properties[prop.Name]
-		if !exists {
-			// Check if it's the primary parameter.
-			if ct.Primary != nil && ct.Primary.Name == prop.Name {
-				propInfo = ct.Primary
-			} else {
-				c.error(prop.PropPos, 0, "E072",
-					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, decl.Component),
-					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
-				continue
-			}
-		}
-		valType := c.checkExpr(prop.Value)
-		if valType != nil && !IsAssignable(valType, propInfo.Type) {
-			c.error(prop.Value.Pos(), 0, "E022",
-				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
-				"")
-		}
-	}
-
-	// Validate event bindings.
-	for _, ev := range decl.Events {
-		eventType, exists := ct.Events[ev.Event]
-		if !exists {
-			c.error(ev.OnPos, 0, "E073",
-				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, decl.Component),
-				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
-			continue
-		}
-
-		// Resolve handler name.
-		handlerIdent, ok := ev.Handler.(*ast.Ident)
-		if !ok {
-			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
-			continue
-		}
-		handlerSym := c.scope.Lookup(handlerIdent.Name)
-		if handlerSym == nil {
-			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
-			continue
-		}
-		handlerSig, ok := handlerSym.Type.(*FuncSignature)
-		if !ok {
-			c.error(ev.Handler.Pos(), 0, "E074",
-				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
-			continue
-		}
-
-		// Validate handler signature: must have 0 params or 1 param matching event type.
-		if len(handlerSig.Params) > 1 {
-			c.error(ev.Handler.Pos(), 0, "E074",
-				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
-			continue
-		}
-		if len(handlerSig.Params) == 1 {
-			paramType := handlerSig.Params[0].Type
-			if !IsAssignable(eventType, paramType) {
-				c.error(ev.Handler.Pos(), 0, "E074",
-					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
-						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
-			}
-		}
-	}
+	// Validate properties and events.
+	c.validateComponentProps(ct, decl.Props, decl.Component)
+	c.validateComponentEvents(ct, decl.Events, decl.Component)
 
 	// Recurse into children.
 	for _, child := range decl.Children {
