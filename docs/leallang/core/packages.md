@@ -80,8 +80,11 @@ pub func load(path: string) -> Config, Error?:
 
     return config, null
 
-pub Window[settings]("Settings"):
-    Button[close_button]("Close")
+pub Window[settings]:
+    title = "Settings"
+
+    Button[close_button]:
+        text = "Close"
 ```
 
 Record fields are also private unless marked with `pub`.
@@ -108,15 +111,21 @@ car.year   # invalid
 Windows can be public.
 
 ```python
-pub Window[settings]("Settings"):
-    Button[close_button]("Close")
+pub Window[settings]:
+    title = "Settings"
+
+    Button[close_button]:
+        text = "Close"
 ```
 
 Child components inside a window are not made public individually.
 
 ```python
-Window[settings]("Settings"):
-    pub Button[close_button]("Close") # invalid
+Window[settings]:
+    title = "Settings"
+
+    pub Button[close_button]:
+        text = "Close" # invalid
 ```
 
 Components are private implementation details of their window. Other packages interact with a window through public functions.
@@ -126,7 +135,7 @@ pub func open():
     window.open(@Window[settings])
 
 pub func set_title(text: string):
-    @Window[settings].Label[title_label].text = text
+    @Label[title_label].text = text
 ```
 
 External packages call the public functions instead of directly mutating internal components.

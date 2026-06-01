@@ -129,7 +129,7 @@ UI references use `@` and refer to windows or components in the UI tree.
 
 ```python
 @Button[save_button]
-@Window[settings].Button[close_button]
+@Label[title]
 ```
 
 Component IDs are not normal variables. They are identifiers inside the UI tree and are accessed through `@` references.
@@ -162,9 +162,15 @@ theme, err = await task
 Component declarations do not use `@`.
 
 ```python
-Button[save_button]("Save")
-Panel[side_panel](bg: colors.white, dock: dock.left):
-    Label[title_label]("Settings")
+Button[save_button]:
+    text = "Save"
+
+Panel[side_panel]:
+    bg = colors.white
+    dock = dock.left
+
+    Label[title_label]:
+        text = "Settings"
 ```
 
 A declaration creates a window or component in the UI tree. A UI reference accesses an existing window or component.

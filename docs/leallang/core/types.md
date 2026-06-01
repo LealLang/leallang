@@ -518,5 +518,6 @@ console.print_ln($"Total: {price * quantity}")
 Interpolation works in component declarations.
 
 ```python
-Label[welcome_label]($"Welcome, {user_name}")
+Label[welcome_label]:
+    text = $"Welcome, {user_name}"
 ```

@@ -33,6 +33,7 @@ type Parser struct {
 	diagnostics *diagnostics.Diagnostics
 	loopDepth   int
 	uiDepth     int
+	windowDepth int
 }
 
 // New creates a parser for tokens.
@@ -131,6 +132,9 @@ func (p *Parser) parseTopLevelDecl() ast.Decl {
 		if async && ui {
 			p.errorAt(p.previous(), "E013", "function cannot be both async and ui", "choose either async or ui")
 		}
+		if ui {
+			p.errorAt(p.previous(), "E013", "ui func is only allowed inside a Window block", "move ui func inside a Window[...] block")
+		}
 		return p.parseFuncDecl(pub, async, ui)
 	case p.check(token.TYPE):
 		if async || ui {
@@ -145,6 +149,11 @@ func (p *Parser) parseTopLevelDecl() ast.Decl {
 	case p.check(token.IDENT):
 		if async || ui {
 			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before variable declarations")
+		}
+		// Component declaration: IDENT LBRACKET IDENT RBRACKET
+		if p.isComponentDeclAhead() {
+			stmt := p.parseComponentDecl()
+			return stmt
 		}
 		if p.checkNext(token.COLON) || p.checkNext(token.EQ) {
 			return p.parseVarDecl()
@@ -364,6 +373,8 @@ func (p *Parser) isComponentDeclAhead() bool {
 //
 //	prop = value
 //	on event = handler
+//	ui func name():
+//	    ...
 //	ChildType[child_id]:
 //	    ...
 func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
@@ -384,10 +395,32 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 	p.expect(token.NEWLINE, "newline after ':'")
 	p.expect(token.INDENT, "indented component body")
 
+	isWindow := component == "Window"
+	if isWindow {
+		p.windowDepth++
+	}
+
 	for !p.check(token.DEDENT) && !p.atEnd() {
 		p.skipNewlines()
 		if p.check(token.DEDENT) || p.atEnd() {
 			break
+		}
+
+		// ui func declaration (only allowed inside Window)
+		if p.check(token.UI) && p.peekNext().Kind == token.FUNC {
+			if !isWindow {
+				uiTok := p.advance() // consume 'ui'
+				p.errorAt(uiTok, "E013", "ui func is only allowed inside a Window block", "move ui func inside a Window[...] block")
+				// Parse and discard the function to recover properly.
+				p.parseFuncDecl(false, false, true)
+				continue
+			}
+			p.advance() // consume 'ui'
+			fn := p.parseFuncDecl(false, false, true)
+			if fn != nil {
+				comp.Funcs = append(comp.Funcs, fn)
+			}
+			continue
 		}
 
 		// Event binding: on <event> = <handler>
@@ -417,8 +450,12 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 			continue
 		}
 
-		p.errorAt(p.peek(), "E013", "expected property, event binding, or child component", "use 'prop = value', 'on event = handler', or 'ChildType[id]:'")
+		p.errorAt(p.peek(), "E013", "expected property, event binding, ui func, or child component", "use 'prop = value', 'on event = handler', 'ui func', or 'ChildType[id]:'")
 		p.synchronize()
+	}
+
+	if isWindow {
+		p.windowDepth--
 	}
 
 	p.expect(token.DEDENT, "dedent after component body")
@@ -1143,6 +1180,13 @@ func (p *Parser) checkNext(kind token.TokenKind) bool {
 		return false
 	}
 	return p.tokens[p.pos+1].Kind == kind
+}
+
+func (p *Parser) peekNext() token.Token {
+	if p.pos+1 >= len(p.tokens) {
+		return token.Token{Kind: token.EOF}
+	}
+	return p.tokens[p.pos+1]
 }
 
 func (p *Parser) advance() token.Token {

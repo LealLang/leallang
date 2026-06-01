@@ -44,7 +44,7 @@ func load_settings():
         msg.error(err.message)
         return
 
-    @Window[settings].TextInput[theme_input].value = config_value.theme
+    @Window[settings].apply_config(config_value)
 ```
 
 ## Arguments
@@ -232,9 +232,14 @@ Forbidden inside `async func`:
 A `ui func` is a UI-facing function owned by a specific window. It is declared inside the owning `Window[...]` block.
 
 ```python
-Window[main]("App"):
-    Label[theme_label]("Light")
-    Label[status_label]("Ready")
+Window[main]:
+    title = "App"
+
+    Label[theme_label]:
+        text = "Light"
+
+    Label[status_label]:
+        text = "Ready"
 
     pub ui func apply_settings(settings: Settings) -> Error?:
         @Label[theme_label].text = settings.theme

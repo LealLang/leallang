@@ -660,29 +660,18 @@ func greet(name: string):
 func TestComponentDeclaration(t *testing.T) {
 	program, diag := parseSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "LealLang App"
-        w = 800
-        h = 600
+Window[main]:
+    title = "LealLang App"
+    w = 800
+    h = 600
 `)
 	requireNoErrors(t, diag)
 	if len(program.Decls) != 1 {
 		t.Fatalf("decl count = %d, want 1", len(program.Decls))
 	}
-	fn, ok := program.Decls[0].(*ast.FuncDecl)
+	comp, ok := program.Decls[0].(*ast.ComponentDecl)
 	if !ok {
-		t.Fatalf("decl type = %T, want *ast.FuncDecl", program.Decls[0])
-	}
-	if !fn.UI {
-		t.Fatal("expected ui func")
-	}
-	if len(fn.Body) != 1 {
-		t.Fatalf("body len = %d, want 1", len(fn.Body))
-	}
-	comp, ok := fn.Body[0].(*ast.ComponentDecl)
-	if !ok {
-		t.Fatalf("stmt type = %T, want *ast.ComponentDecl", fn.Body[0])
+		t.Fatalf("decl type = %T, want *ast.ComponentDecl", program.Decls[0])
 	}
 	if comp.Component != "Window" {
 		t.Fatalf("component = %q, want Window", comp.Component)
@@ -707,22 +696,23 @@ ui func view():
 func TestComponentWithChildren(t *testing.T) {
 	program, diag := parseSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "App"
+Window[main]:
+    title = "App"
 
-        Col[root]:
-            gap = 12
+    Col[root]:
+        gap = 12
 
-            Label[title]:
-                text = "Hello"
+        Label[title]:
+            text = "Hello"
 
-            Button[save_btn]:
-                text = "Save"
+        Button[save_btn]:
+            text = "Save"
 `)
 	requireNoErrors(t, diag)
-	fn := program.Decls[0].(*ast.FuncDecl)
-	comp := fn.Body[0].(*ast.ComponentDecl)
+	comp, ok := program.Decls[0].(*ast.ComponentDecl)
+	if !ok {
+		t.Fatalf("decl type = %T, want *ast.ComponentDecl", program.Decls[0])
+	}
 	if len(comp.Children) != 1 {
 		t.Fatalf("children count = %d, want 1", len(comp.Children))
 	}
@@ -744,18 +734,26 @@ ui func view():
 func TestComponentEventBinding(t *testing.T) {
 	program, diag := parseSource(t, `package app.main
 
-ui func view():
+Window[main]:
+    title = "App"
+
     Button[save_btn]:
         text = "Save"
         on click = handle_save
 `)
 	requireNoErrors(t, diag)
-	fn := program.Decls[0].(*ast.FuncDecl)
-	comp := fn.Body[0].(*ast.ComponentDecl)
-	if len(comp.Events) != 1 {
-		t.Fatalf("events count = %d, want 1", len(comp.Events))
+	comp, ok := program.Decls[0].(*ast.ComponentDecl)
+	if !ok {
+		t.Fatalf("decl type = %T, want *ast.ComponentDecl", program.Decls[0])
 	}
-	ev := comp.Events[0]
+	if len(comp.Children) != 1 {
+		t.Fatalf("children count = %d, want 1", len(comp.Children))
+	}
+	btn := comp.Children[0]
+	if len(btn.Events) != 1 {
+		t.Fatalf("events count = %d, want 1", len(btn.Events))
+	}
+	ev := btn.Events[0]
 	if ev.Event != "click" {
 		t.Fatalf("event = %q, want click", ev.Event)
 	}
@@ -771,16 +769,17 @@ ui func view():
 func TestComponentMultipleProps(t *testing.T) {
 	program, diag := parseSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "App"
-        w = 800
-        h = 600
-        bg = "white"
+Window[main]:
+    title = "App"
+    w = 800
+    h = 600
+    bg = "white"
 `)
 	requireNoErrors(t, diag)
-	fn := program.Decls[0].(*ast.FuncDecl)
-	comp := fn.Body[0].(*ast.ComponentDecl)
+	comp, ok := program.Decls[0].(*ast.ComponentDecl)
+	if !ok {
+		t.Fatalf("decl type = %T, want *ast.ComponentDecl", program.Decls[0])
+	}
 	if len(comp.Props) != 4 {
 		t.Fatalf("props count = %d, want 4", len(comp.Props))
 	}
@@ -835,6 +834,77 @@ func TestOnOutsideComponentBlock(t *testing.T) {
 
 func main():
     on click = handle_save
+`)
+	requireErrorCode(t, diag, "E013")
+}
+
+func TestUIFuncInsideWindowBlock(t *testing.T) {
+	program, diag := parseSource(t, `package app.main
+
+Window[main]:
+    title = "App"
+    w = 800
+    h = 600
+
+    ui func handle_save():
+        @Label[title].text = "Saved"
+
+    Col[root]:
+        gap = 12
+
+        Label[title]:
+            text = "Hello"
+
+        Button[save_btn]:
+            text = "Save"
+            on click = handle_save
+`)
+	requireNoErrors(t, diag)
+	if len(program.Decls) != 1 {
+		t.Fatalf("decl count = %d, want 1", len(program.Decls))
+	}
+	comp, ok := program.Decls[0].(*ast.ComponentDecl)
+	if !ok {
+		t.Fatalf("decl type = %T, want *ast.ComponentDecl", program.Decls[0])
+	}
+	if comp.Component != "Window" || comp.ID != "main" {
+		t.Fatalf("component = %s[%s], want Window[main]", comp.Component, comp.ID)
+	}
+	if len(comp.Funcs) != 1 {
+		t.Fatalf("funcs count = %d, want 1", len(comp.Funcs))
+	}
+	if comp.Funcs[0].Name != "handle_save" {
+		t.Fatalf("func name = %q, want handle_save", comp.Funcs[0].Name)
+	}
+	if !comp.Funcs[0].UI {
+		t.Fatal("expected ui func")
+	}
+	if len(comp.Children) != 1 {
+		t.Fatalf("children count = %d, want 1", len(comp.Children))
+	}
+}
+
+func TestUIFuncOutsideWindowBlock(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+ui func view():
+    Col[root]:
+        gap = 12
+`)
+	requireErrorCode(t, diag, "E013")
+}
+
+func TestUIFuncInsideNonWindowComponent(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+Window[main]:
+    title = "App"
+
+    Col[root]:
+        gap = 12
+
+        ui func bad():
+            console.print_ln("nope")
 `)
 	requireErrorCode(t, diag, "E013")
 }

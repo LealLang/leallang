@@ -331,6 +331,7 @@ type ComponentDecl struct {
 	Props     []*ComponentProp
 	Events    []*EventBinding
 	Children  []*ComponentDecl
+	Funcs     []*FuncDecl // ui func declarations (only valid inside Window)
 }
 
 // ComponentProp represents a property assignment inside a component block.
@@ -655,6 +656,9 @@ func (c *ComponentRefExpr) End() token.Position {
 }
 func (c *ComponentDecl) Pos() token.Position { return c.CompPos }
 func (c *ComponentDecl) End() token.Position {
+	if len(c.Funcs) > 0 {
+		return c.Funcs[len(c.Funcs)-1].End()
+	}
 	if len(c.Children) > 0 {
 		return c.Children[len(c.Children)-1].End()
 	}

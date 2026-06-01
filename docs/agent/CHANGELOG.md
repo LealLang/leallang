@@ -21,6 +21,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `internal/interpreter/ui_test.go`: Updated all 4 UI integration tests to use new top-level `Window[...]` pattern instead of `ui func view():` wrapper. UI operations (mount, prop-set, event-bind) now happen during program initialization rather than when `main()` runs. `main()` uses `pass` or calls handlers directly.
+- Enforced `ui func` must be inside `Window[...]` blocks:
+  - `internal/ast/ast.go`: Added `Funcs []*FuncDecl` field to `ComponentDecl` for storing `ui func` declarations inside Window blocks
+  - `internal/parser/parser.go`: Added `windowDepth` tracking, `ui func` parsing inside component blocks, rejection of `ui func` outside Window blocks and at top level, top-level `ComponentDecl` parsing support, `peekNext()` helper
+  - `internal/checker/checker.go`: Added `collectComponentDecls()` for collecting `ui func` from component trees, `checkComponentDeclTopLevel()` for top-level Window validation, `checkComponentDeclInWindow()` for components inside Window's tree with duplicate ID checking
+  - `internal/interpreter/interpreter.go`: Added `registerComponentFuncs()` for registering `ui func` from component trees, top-level `ComponentDecl` evaluation in program initialization
+  - `internal/ast/print.go`: Updated `ComponentDecl` pretty-print to include nested `Funcs`
+  - `internal/parser/parser_test.go`: Updated all component tests to use `Window[...]` at top level, added `TestUIFuncInsideWindowBlock`, `TestUIFuncOutsideWindowBlock`, `TestUIFuncInsideNonWindowComponent`
+  - `internal/checker/checker_test.go`: Updated all component tests to use `Window[...]` at top level
+- Updated spec docs to match block syntax:
+  - `docs/leallang/components/index.md`: Component declarations use `ComponentType[id]:` with `prop = value` and `on event = handler`
+  - `docs/leallang/components/widgets.md`: All widget examples use block syntax
+  - `docs/leallang/components/containers.md`: All container examples use block syntax
+  - `docs/leallang/components/complex.md`: All complex component examples use block syntax
+  - `docs/leallang/components/events.md`: Event binding uses `on event = handler` syntax
+  - `docs/leallang/core/lexical.md`: Updated component syntax examples
+  - `docs/leallang/core/expressions.md`: Updated component declaration examples, removed `@Window[id].ComponentType[id]` form
+  - `docs/leallang/core/packages.md`: Updated Window/component visibility examples
+  - `docs/leallang/core/types.md`: Updated Label example to block syntax
+  - `docs/leallang/builtins/constants.md`: Updated Panel examples to block syntax
+  - `docs/leallang/plugins/index.md`: Updated ColorPicker example to block syntax
+  - `docs/leallang/examples/full-example.md`: Complete rewrite with `Window[...]` at top level and `ui func` inside
+  - `docs/leallang/examples/application-structure.md`: Updated Window/Button examples to block syntax
+  - `docs/leallang/functions/index.md`: Updated `ui func` example with Window block pattern
+- `examples/test.ll`: Restructured to use `Window[main]:` at top level with `ui func handle_save()` inside
+- `internal/checker/checker.go`: Added `windowMethods` map for tracking `ui func` methods per Window instance, `@Window[id].func()` cross-window call resolution via `ComponentRefExpr` field lookup
+- `internal/interpreter/interpreter.go`: Added `ui func` method lookup in `evalFieldExpr` for `ComponentRefVal` — resolves `@Window[id].func()` calls by looking up registered functions in the environment
 - Split `internal/interpreter/interpreter_test.go` (3,220 lines) into 8 focused test files:
   - `test_helpers_test.go` (102 lines) — shared test infrastructure (runSource, safeWriter, etc.)
   - `async_test.go` (506 lines) — 26 tests for async/await, TaskVal, and cloneForTask

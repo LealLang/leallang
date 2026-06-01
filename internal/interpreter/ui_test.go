@@ -36,19 +36,18 @@ func runWithUIBackend(t *testing.T, src string) (*uiir.Log, *diagnostics.Diagnos
 func TestUIMountOrder(t *testing.T) {
 	log, diag := runWithUIBackend(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "App"
+Window[main]:
+    title = "App"
 
-        Col[root]:
-            Label[title]:
-                text = "Hello"
+    Col[root]:
+        Label[title]:
+            text = "Hello"
 
-            Button[save_btn]:
-                text = "Save"
+        Button[save_btn]:
+            text = "Save"
 
 func main():
-    view()
+    pass
 `)
 	if diag.HasErrors() {
 		t.Fatalf("unexpected errors:\n%s", diag.Format())
@@ -86,14 +85,13 @@ func main():
 func TestUIPropValues(t *testing.T) {
 	log, diag := runWithUIBackend(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "LealLang App"
-        w = 800
-        h = 600
+Window[main]:
+    title = "LealLang App"
+    w = 800
+    h = 600
 
 func main():
-    view()
+    pass
 `)
 	if diag.HasErrors() {
 		t.Fatalf("unexpected errors:\n%s", diag.Format())
@@ -138,13 +136,15 @@ func TestUIEventBindings(t *testing.T) {
 func handle_save():
     pass
 
-ui func view():
+Window[main]:
+    title = "App"
+
     Button[save_btn]:
         text = "Save"
         on click = handle_save
 
 func main():
-    view()
+    pass
 `)
 	if diag.HasErrors() {
 		t.Fatalf("unexpected errors:\n%s", diag.Format())
@@ -171,19 +171,17 @@ func TestUIComponentRefAssignment(t *testing.T) {
 func handle_save():
     @Label[title].text = "Saved"
 
-ui func view():
-    Window[main]:
-        title = "App"
+Window[main]:
+    title = "App"
 
-        Label[title]:
-            text = "Hello"
+    Label[title]:
+        text = "Hello"
 
-        Button[save_btn]:
-            text = "Save"
-            on click = handle_save
+    Button[save_btn]:
+        text = "Save"
+        on click = handle_save
 
 func main():
-    view()
     handle_save()
 `)
 	if diag.HasErrors() {

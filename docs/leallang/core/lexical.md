@@ -16,11 +16,17 @@ else:
     console.print_ln("Not ready")
 ```
 
-Parentheses are required for function calls and component declarations.
+Parentheses are required for function calls.
 
 ```python
 console.print_ln("Hello")
-Button[save_button]("Save")
+```
+
+Component declarations use block syntax with indented properties.
+
+```python
+Button[save_button]:
+    text = "Save"
 ```
 
 Names are case-sensitive.
@@ -72,14 +78,15 @@ LealLang uses brackets in several distinct syntax forms.
 Component declarations create UI nodes and do not use `@`.
 
 ```python
-Button[save_button]("Save")
+Button[save_button]:
+    text = "Save"
 ```
 
 UI references access existing UI nodes and use `@`.
 
 ```python
 @Button[save_button]
-@Window[settings].Button[close_button]
+@Label[title]
 ```
 
 Component IDs such as `save_button` and `settings` are not normal variables. They are identifiers inside the UI tree and are accessed through UI references.
@@ -166,6 +173,9 @@ orientation.horizontal
 Window and component IDs use `snake_case`.
 
 ```python
-Window[main_window]("My App"):
-    Button[save_button]("Save")
+Window[main_window]:
+    title = "My App"
+
+    Button[save_button]:
+        text = "Save"
 ```

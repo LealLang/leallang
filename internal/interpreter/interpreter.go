@@ -132,6 +132,8 @@ func (interp *Interpreter) Run(program *ast.Program) error {
 			interp.globals.Set(d.Name, &FuncVal{Name: d.Name, Params: d.Params, Body: d.Body, Closure: interp.globals, Async: d.Async, UI: d.UI})
 		case *ast.TypeDecl:
 			interp.globals.Set(d.Name, &RecordTypeVal{Decl: d})
+		case *ast.ComponentDecl:
+			interp.registerComponentFuncs(d)
 		}
 	}
 	for _, decl := range program.Decls {
@@ -142,6 +144,10 @@ func (interp *Interpreter) Run(program *ast.Program) error {
 			}
 		case *ast.ConstDecl:
 			if _, err := interp.evalConstDecl(d, interp.globals); err != nil {
+				return err
+			}
+		case *ast.ComponentDecl:
+			if err := interp.evalComponentDecl(d, interp.globals, ""); err != nil {
 				return err
 			}
 		}
@@ -642,6 +648,10 @@ func (interp *Interpreter) evalField(expr *ast.FieldExpr, env *Env) (Value, erro
 		}
 		return nil, interp.runtimeError("E100", expr.Dot, 0, fmt.Sprintf("const group %s has no member '%s'", v.Name, expr.Field), "")
 	case *ComponentRefVal:
+		// Look up ui func methods registered in the environment.
+		if val, ok := env.Get(expr.Field); ok {
+			return val, nil
+		}
 		fmt.Fprintf(interp.stderr, "[stub] UI property %s.%s is not implemented\n", v.String(), expr.Field)
 		return Null, nil
 	default:
@@ -868,6 +878,11 @@ func (interp *Interpreter) evalComponentDecl(decl *ast.ComponentDecl, env *Env, 
 		})
 	}
 
+	// Register ui func declarations.
+	for _, fn := range decl.Funcs {
+		env.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: env, UI: true})
+	}
+
 	// Recurse into children.
 	for _, child := range decl.Children {
 		if err := interp.evalComponentDecl(child, env, decl.ID); err != nil {
@@ -876,6 +891,16 @@ func (interp *Interpreter) evalComponentDecl(decl *ast.ComponentDecl, env *Env, 
 	}
 
 	return nil
+}
+
+// registerComponentFuncs registers ui func declarations from a component tree in the global scope.
+func (interp *Interpreter) registerComponentFuncs(decl *ast.ComponentDecl) {
+	for _, fn := range decl.Funcs {
+		interp.globals.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: interp.globals, UI: true})
+	}
+	for _, child := range decl.Children {
+		interp.registerComponentFuncs(child)
+	}
 }
 
 func (interp *Interpreter) evalIf(stmt *ast.IfStmt, env *Env) (*Signal, error) {

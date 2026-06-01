@@ -24,8 +24,11 @@ Examples:
 Color properties accept named color constants or hex color literal strings.
 
 ```python
-Panel[main_panel](bg: colors.white)
-Panel[content_panel](bg: "#f5f5f5ff")
+Panel[main_panel]:
+    bg = colors.white
+
+Panel[content_panel]:
+    bg = "#f5f5f5ff"
 ```
 
 ## dock

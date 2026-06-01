@@ -85,8 +85,12 @@ package app.main
 
 import plugin.my_uikit
 
-Window[main_window]("Plugin Example"):
-    ColorPicker[color_picker](value: "#ff0000ff", change: color_changed)
+Window[main_window]:
+    title = "Plugin Example"
+
+    ColorPicker[color_picker]:
+        value = "#ff0000ff"
+        on change = color_changed
 
 func color_changed():
     console.print_ln(@ColorPicker[color_picker].value)

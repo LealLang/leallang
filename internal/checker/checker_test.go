@@ -993,11 +993,10 @@ func main():
 func TestComponentValidProps(t *testing.T) {
 	diag := checkSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "LealLang App"
-        w = 800
-        h = 600
+Window[main]:
+    title = "LealLang App"
+    w = 800
+    h = 600
 `)
 	requireNoErrors(t, diag)
 }
@@ -1005,10 +1004,9 @@ ui func view():
 func TestComponentUnknownProp(t *testing.T) {
 	diag := checkSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "App"
-        unknown_prop = "value"
+Window[main]:
+    title = "App"
+    unknown_prop = "value"
 `)
 	requireErrorCode(t, diag, "E072")
 }
@@ -1016,9 +1014,8 @@ ui func view():
 func TestComponentPropTypeMismatch(t *testing.T) {
 	diag := checkSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = 42
+Window[main]:
+    title = 42
 `)
 	requireErrorCode(t, diag, "E022")
 }
@@ -1026,15 +1023,14 @@ ui func view():
 func TestComponentDuplicateID(t *testing.T) {
 	diag := checkSource(t, `package app.main
 
-ui func view():
-    Window[main]:
-        title = "App"
+Window[main]:
+    title = "App"
 
-        Label[title]:
-            text = "Hello"
+    Label[title]:
+        text = "Hello"
 
-        Label[title]:
-            text = "World"
+    Label[title]:
+        text = "World"
 `)
 	requireErrorCode(t, diag, "E070")
 }
@@ -1045,7 +1041,9 @@ func TestComponentUnknownEvent(t *testing.T) {
 func handle_save():
     pass
 
-ui func view():
+Window[main]:
+    title = "App"
+
     Button[btn]:
         text = "Save"
         on unknown_event = handle_save
@@ -1060,7 +1058,9 @@ func TestComponentEventHandlerSignature(t *testing.T) {
 func handle_save():
     pass
 
-ui func view():
+Window[main]:
+    title = "App"
+
     Button[btn]:
         text = "Save"
         on click = handle_save
@@ -1073,7 +1073,9 @@ ui func view():
 func handle_click(event: ClickEvent):
     pass
 
-ui func view():
+Window[main]:
+    title = "App"
+
     Button[btn]:
         text = "Save"
         on click = handle_click
@@ -1087,7 +1089,9 @@ func TestComponentEventHandlerSignatureMismatch(t *testing.T) {
 func handle_save(event: ScrollEvent):
     pass
 
-ui func view():
+Window[main]:
+    title = "App"
+
     Button[btn]:
         text = "Save"
         on click = handle_save

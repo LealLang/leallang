@@ -15,24 +15,26 @@ import (
 
 // Checker performs semantic analysis on an AST.
 type Checker struct {
-	program      *ast.Program
-	diag         *diagnostics.Diagnostics
-	scope        *Scope
-	global       *Scope
-	pkgPath      string
-	inAsyncFunc  bool
-	inUIFunc     bool
-	componentIDs map[string]token.Position // scoped per ui func
+	program       *ast.Program
+	diag          *diagnostics.Diagnostics
+	scope         *Scope
+	global        *Scope
+	pkgPath       string
+	inAsyncFunc   bool
+	inUIFunc      bool
+	componentIDs  map[string]token.Position // scoped per ui func
+	windowMethods map[string]map[string]bool // windowID -> set of ui func names
 }
 
 // Check performs semantic analysis on the given program.
 // Errors are reported to diag.
 func Check(program *ast.Program, diag *diagnostics.Diagnostics) {
 	c := &Checker{
-		program: program,
-		diag:    diag,
-		global:  NewScope(nil),
-		scope:   nil, // set after builtins
+		program:       program,
+		diag:          diag,
+		global:        NewScope(nil),
+		scope:         nil, // set after builtins
+		windowMethods: make(map[string]map[string]bool),
 	}
 	c.scope = c.global
 
@@ -63,7 +65,28 @@ func (c *Checker) collectDecls(program *ast.Program) {
 			c.collectVarDecl(d)
 		case *ast.ConstDecl:
 			c.collectConstDecl(d)
+		case *ast.ComponentDecl:
+			c.collectComponentDecls(d)
 		}
+	}
+}
+
+// collectComponentDecls collects ui func declarations from a component tree.
+func (c *Checker) collectComponentDecls(decl *ast.ComponentDecl) {
+	if decl.Component == "Window" && len(decl.Funcs) > 0 {
+		methods := make(map[string]bool)
+		for _, fn := range decl.Funcs {
+			c.collectFuncDecl(fn)
+			methods[fn.Name] = true
+		}
+		c.windowMethods[decl.ID] = methods
+	} else {
+		for _, fn := range decl.Funcs {
+			c.collectFuncDecl(fn)
+		}
+	}
+	for _, child := range decl.Children {
+		c.collectComponentDecls(child)
 	}
 }
 
@@ -79,7 +102,196 @@ func (c *Checker) checkDecls(program *ast.Program) {
 			c.checkConstDecl(d)
 		case *ast.TypeDecl:
 			c.checkTypeDecl(d)
+		case *ast.ComponentDecl:
+			c.checkComponentDeclTopLevel(d)
 		}
+	}
+}
+
+// checkComponentDeclTopLevel checks a top-level component declaration (e.g., Window).
+func (c *Checker) checkComponentDeclTopLevel(decl *ast.ComponentDecl) {
+	// Only Window is allowed at the top level.
+	if decl.Component != "Window" {
+		c.error(decl.CompPos, 0, "E013", "component declaration outside ui function", "only Window[...] is allowed at the top level; other components must be inside ui func bodies")
+		return
+	}
+
+	// Initialize component ID tracking for the Window's tree.
+	prevIDs := c.componentIDs
+	c.componentIDs = make(map[string]token.Position)
+	defer func() { c.componentIDs = prevIDs }()
+
+	// Register the Window's own ID.
+	c.componentIDs[decl.ID] = decl.CompPos
+
+	// Look up the component type.
+	sym := c.global.Lookup(decl.Component)
+	if sym == nil {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", decl.Component), "")
+		return
+	}
+	ct, ok := sym.Type.(*ComponentType)
+	if !ok {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("'%s' is not a component type", decl.Component), "")
+		return
+	}
+
+	// Validate properties.
+	for _, prop := range decl.Props {
+		propInfo, exists := ct.Properties[prop.Name]
+		if !exists {
+			if ct.Primary != nil && ct.Primary.Name == prop.Name {
+				propInfo = ct.Primary
+			} else {
+				c.error(prop.PropPos, 0, "E072",
+					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, decl.Component),
+					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
+				continue
+			}
+		}
+		valType := c.checkExpr(prop.Value)
+		if valType != nil && !IsAssignable(valType, propInfo.Type) {
+			c.error(prop.Value.Pos(), 0, "E022",
+				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
+				"")
+		}
+	}
+
+	// Validate event bindings.
+	for _, ev := range decl.Events {
+		eventType, exists := ct.Events[ev.Event]
+		if !exists {
+			c.error(ev.OnPos, 0, "E073",
+				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, decl.Component),
+				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
+			continue
+		}
+		handlerIdent, ok := ev.Handler.(*ast.Ident)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
+			continue
+		}
+		handlerSym := c.scope.Lookup(handlerIdent.Name)
+		if handlerSym == nil {
+			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
+			continue
+		}
+		handlerSig, ok := handlerSym.Type.(*FuncSignature)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) > 1 {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) == 1 {
+			paramType := handlerSig.Params[0].Type
+			if !IsAssignable(eventType, paramType) {
+				c.error(ev.Handler.Pos(), 0, "E074",
+					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
+						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
+			}
+		}
+	}
+
+	// Check ui func declarations inside the Window.
+	for _, fn := range decl.Funcs {
+		c.checkFuncDecl(fn)
+	}
+
+	// Recurse into children (they are inside the Window's component tree, which is a UI context).
+	for _, child := range decl.Children {
+		c.checkComponentDeclInWindow(child)
+	}
+}
+
+// checkComponentDeclInWindow checks a component declaration inside a Window's tree.
+// These components don't need to be inside a ui func — they are part of the Window's declarative tree.
+func (c *Checker) checkComponentDeclInWindow(decl *ast.ComponentDecl) {
+	// Check for duplicate component ID.
+	if existing, exists := c.componentIDs[decl.ID]; exists {
+		c.error(decl.CompPos, 0, "E070",
+			fmt.Sprintf("duplicate component id '%s' in this window (first used at line %d)", decl.ID, existing.Line),
+			"component ids must be unique within a window")
+		return
+	}
+	c.componentIDs[decl.ID] = decl.CompPos
+
+	sym := c.global.Lookup(decl.Component)
+	if sym == nil {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", decl.Component), "")
+		return
+	}
+	ct, ok := sym.Type.(*ComponentType)
+	if !ok {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("'%s' is not a component type", decl.Component), "")
+		return
+	}
+
+	for _, prop := range decl.Props {
+		propInfo, exists := ct.Properties[prop.Name]
+		if !exists {
+			if ct.Primary != nil && ct.Primary.Name == prop.Name {
+				propInfo = ct.Primary
+			} else {
+				c.error(prop.PropPos, 0, "E072",
+					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, decl.Component),
+					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
+				continue
+			}
+		}
+		valType := c.checkExpr(prop.Value)
+		if valType != nil && !IsAssignable(valType, propInfo.Type) {
+			c.error(prop.Value.Pos(), 0, "E022",
+				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
+				"")
+		}
+	}
+
+	for _, ev := range decl.Events {
+		eventType, exists := ct.Events[ev.Event]
+		if !exists {
+			c.error(ev.OnPos, 0, "E073",
+				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, decl.Component),
+				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
+			continue
+		}
+		handlerIdent, ok := ev.Handler.(*ast.Ident)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
+			continue
+		}
+		handlerSym := c.scope.Lookup(handlerIdent.Name)
+		if handlerSym == nil {
+			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
+			continue
+		}
+		handlerSig, ok := handlerSym.Type.(*FuncSignature)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) > 1 {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) == 1 {
+			paramType := handlerSig.Params[0].Type
+			if !IsAssignable(eventType, paramType) {
+				c.error(ev.Handler.Pos(), 0, "E074",
+					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
+						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
+			}
+		}
+	}
+
+	for _, child := range decl.Children {
+		c.checkComponentDeclInWindow(child)
 	}
 }
 
@@ -707,6 +919,19 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 				calleeType = prop.Type
 			} else if t.Primary != nil && t.Primary.Name == fn.Field {
 				calleeType = t.Primary.Type
+			} else if compRef, ok := fn.X.(*ast.ComponentRefExpr); ok {
+				// Check if the field is a ui func method on this window instance.
+				if methods, exists := c.windowMethods[compRef.ID]; exists && methods[fn.Field] {
+					sym := c.global.Lookup(fn.Field)
+					if sym != nil {
+						if s, ok := sym.Type.(*FuncSignature); ok {
+							sig = s
+						}
+					}
+				}
+				if sig == nil {
+					calleeType = baseType
+				}
 			} else {
 				calleeType = baseType
 			}

@@ -244,6 +244,9 @@ func (p *printer) node(node Node, indent int) {
 			p.line(indent+1, "EventBinding event=%s", ev.Event)
 			p.node(ev.Handler, indent+2)
 		}
+		for _, fn := range n.Funcs {
+			p.node(fn, indent+1)
+		}
 		for _, child := range n.Children {
 			p.node(child, indent+1)
 		}
