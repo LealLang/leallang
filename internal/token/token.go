@@ -62,6 +62,7 @@ const (
 	ASYNC
 	AWAIT
 	UI
+	ON
 
 	// Operators
 	PLUS
@@ -148,6 +149,7 @@ var kindNames = [...]string{
 	ASYNC:     "ASYNC",
 	AWAIT:     "AWAIT",
 	UI:        "UI",
+	ON:        "ON",
 
 	PLUS:         "PLUS",
 	MINUS:        "MINUS",
@@ -226,6 +228,7 @@ var keywords = map[string]TokenKind{
 	"async":    ASYNC,
 	"await":    AWAIT,
 	"ui":       UI,
+	"on":       ON,
 }
 
 // LookupKeyword returns the TokenKind for a keyword, or IDENT if it is not a keyword.

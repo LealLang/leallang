@@ -6,10 +6,19 @@ package checker
 import (
 	"testing"
 
+	"github.com/LealLang/leallang/internal/ast"
 	"github.com/LealLang/leallang/internal/diagnostics"
 	"github.com/LealLang/leallang/internal/lexer"
 	"github.com/LealLang/leallang/internal/parser"
 )
+
+func parseSource(t *testing.T, src string) (*ast.Program, *diagnostics.Diagnostics) {
+	t.Helper()
+	diag := diagnostics.New()
+	tokens := lexer.New("test.ll", src, diag).Tokenize()
+	program := parser.New(tokens, diag).Parse()
+	return program, diag
+}
 
 func checkSource(t *testing.T, src string) *diagnostics.Diagnostics {
 	t.Helper()
@@ -977,4 +986,123 @@ func main():
     result = await task
 `)
 	requireNoErrors(t, diag)
+}
+
+// --- UI Component Declarations ---
+
+func TestComponentValidProps(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+ui func view():
+    Window[main]:
+        title = "LealLang App"
+        w = 800
+        h = 600
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestComponentUnknownProp(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+ui func view():
+    Window[main]:
+        title = "App"
+        unknown_prop = "value"
+`)
+	requireErrorCode(t, diag, "E072")
+}
+
+func TestComponentPropTypeMismatch(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+ui func view():
+    Window[main]:
+        title = 42
+`)
+	requireErrorCode(t, diag, "E022")
+}
+
+func TestComponentDuplicateID(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+ui func view():
+    Window[main]:
+        title = "App"
+
+        Label[title]:
+            text = "Hello"
+
+        Label[title]:
+            text = "World"
+`)
+	requireErrorCode(t, diag, "E070")
+}
+
+func TestComponentUnknownEvent(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func handle_save():
+    pass
+
+ui func view():
+    Button[btn]:
+        text = "Save"
+        on unknown_event = handle_save
+`)
+	requireErrorCode(t, diag, "E073")
+}
+
+func TestComponentEventHandlerSignature(t *testing.T) {
+	// Valid: handler with no params
+	diag := checkSource(t, `package app.main
+
+func handle_save():
+    pass
+
+ui func view():
+    Button[btn]:
+        text = "Save"
+        on click = handle_save
+`)
+	requireNoErrors(t, diag)
+
+	// Valid: handler with matching param type
+	diag = checkSource(t, `package app.main
+
+func handle_click(event: ClickEvent):
+    pass
+
+ui func view():
+    Button[btn]:
+        text = "Save"
+        on click = handle_click
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestComponentEventHandlerSignatureMismatch(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func handle_save(event: ScrollEvent):
+    pass
+
+ui func view():
+    Button[btn]:
+        text = "Save"
+        on click = handle_save
+`)
+	requireErrorCode(t, diag, "E074")
+}
+
+func TestComponentOnlyInUIFunc(t *testing.T) {
+	// Component declarations are only valid inside ui func bodies.
+	// The parser will reject them in non-ui blocks with E013.
+	_, diag := parseSource(t, `package app.main
+
+func view():
+    Window[main]:
+        title = "App"
+`)
+	requireErrorCode(t, diag, "E013")
 }

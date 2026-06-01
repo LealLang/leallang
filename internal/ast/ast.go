@@ -323,6 +323,30 @@ type ComponentRefExpr struct {
 	ID        string
 }
 
+// ComponentDecl represents a UI component declaration: ComponentType[id]:
+type ComponentDecl struct {
+	CompPos   token.Position
+	Component string // "Window", "Button", "Col"
+	ID        string // "main", "save_btn"
+	Props     []*ComponentProp
+	Events    []*EventBinding
+	Children  []*ComponentDecl
+}
+
+// ComponentProp represents a property assignment inside a component block.
+type ComponentProp struct {
+	PropPos token.Position
+	Name    string
+	Value   Expr
+}
+
+// EventBinding represents an event handler binding inside a component block.
+type EventBinding struct {
+	OnPos   token.Position
+	Event   string
+	Handler Expr // Ident referencing a function name
+}
+
 // RangeExpr represents inclusive and exclusive ranges.
 type RangeExpr struct {
 	Low       Expr
@@ -386,6 +410,8 @@ func (*ContinueStmt) stmtNode()     {}
 func (*IfStmt) stmtNode()           {}
 func (*SwitchStmt) stmtNode()       {}
 func (*LoopStmt) stmtNode()         {}
+func (*ComponentDecl) stmtNode()    {}
+func (*ComponentDecl) declNode()    {}
 func (*Literal) exprNode()          {}
 func (*InterpStringExpr) exprNode() {}
 func (*Ident) exprNode()            {}
@@ -626,6 +652,33 @@ func (i *IndexExpr) End() token.Position        { return advancePosition(i.RBrac
 func (c *ComponentRefExpr) Pos() token.Position { return c.AtPos }
 func (c *ComponentRefExpr) End() token.Position {
 	return endOfName(c.AtPos, "@"+c.Component+"["+c.ID+"]")
+}
+func (c *ComponentDecl) Pos() token.Position { return c.CompPos }
+func (c *ComponentDecl) End() token.Position {
+	if len(c.Children) > 0 {
+		return c.Children[len(c.Children)-1].End()
+	}
+	if len(c.Events) > 0 {
+		return c.Events[len(c.Events)-1].End()
+	}
+	if len(c.Props) > 0 {
+		return c.Props[len(c.Props)-1].End()
+	}
+	return endOfName(c.CompPos, c.Component+"["+c.ID+"]")
+}
+func (p *ComponentProp) Pos() token.Position { return p.PropPos }
+func (p *ComponentProp) End() token.Position {
+	if p.Value != nil {
+		return p.Value.End()
+	}
+	return endOfName(p.PropPos, p.Name)
+}
+func (e *EventBinding) Pos() token.Position { return e.OnPos }
+func (e *EventBinding) End() token.Position {
+	if e.Handler != nil {
+		return e.Handler.End()
+	}
+	return endOfName(e.OnPos, "on "+e.Event)
 }
 func (r *RangeExpr) Pos() token.Position   { return nodePos(r.Low) }
 func (r *RangeExpr) End() token.Position   { return nodeEnd(r.High) }

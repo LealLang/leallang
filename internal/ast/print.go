@@ -234,6 +234,19 @@ func (p *printer) node(node Node, indent int) {
 		p.node(n.Index, indent+1)
 	case *ComponentRefExpr:
 		p.line(indent, "ComponentRefExpr component=%s id=%s", n.Component, n.ID)
+	case *ComponentDecl:
+		p.line(indent, "ComponentDecl component=%s id=%s", n.Component, n.ID)
+		for _, prop := range n.Props {
+			p.line(indent+1, "Prop name=%s", prop.Name)
+			p.node(prop.Value, indent+2)
+		}
+		for _, ev := range n.Events {
+			p.line(indent+1, "EventBinding event=%s", ev.Event)
+			p.node(ev.Handler, indent+2)
+		}
+		for _, child := range n.Children {
+			p.node(child, indent+1)
+		}
 	case *RangeExpr:
 		p.line(indent, "RangeExpr exclusive=%t", n.Exclusive)
 		p.node(n.Low, indent+1)

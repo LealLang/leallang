@@ -4,7 +4,20 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0] - 01-06-2026
+## [0.0.1] - 01-06-2026
+
+### Implemented
+
+- First-class UI support as a complete language feature:
+  - `internal/ast/ast.go`: `ComponentDecl`, `ComponentProp`, `EventBinding` AST nodes with source positions and interface markers
+  - `internal/token/token.go`: `ON` keyword token for event binding syntax
+  - `internal/parser/parser.go`: `parseUIBlock()` and `parseComponentDecl()` methods for parsing `ComponentType[id]:` blocks with props, events, and nested children inside `ui func` bodies
+  - `internal/checker/checker.go`: `checkComponentDecl()` with full validation — component type lookup (35 types), duplicate ID detection (E070), property validation (E072), type checking (E022), event validation (E073), handler signature validation (E074)
+  - `internal/uiir/uiir.go`: Stable UI intermediate representation (`Op`, `OpKind`, `Log`) independent of AST/checker/desktop framework
+  - `internal/uiir/fakebackend.go`: Test backend that records mount, prop-set, and event-bind operations for headless testing
+  - `internal/interpreter/interpreter.go`: `evalComponentDecl()` evaluates component trees, records UI operations to backend log, supports `@Component[id].prop = value` assignments via `OpPropSet`
+  - `internal/interpreter/value.go`: `valueToUI()` helper for LealLang-to-Go value conversion
+  - 20 new tests: 7 parser, 8 checker, 5 interpreter integration
 
 ### Changed
 
@@ -18,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `records_and_functions_test.go` (700 lines) — 45 tests for records, functions, strings
   - `declarations_test.go` (170 lines) — 12 tests for const declarations and stub namespaces
 
-## [0] - 31-05-2026
+## [0.0.1] - 31-05-2026
 
 ### Added
 
@@ -77,7 +90,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 8 interpreter tests for async: returns before completion, concurrent tasks, runtime error propagation, list/dict/record deep-copy, non-sendable rejection, callDepth isolation.
 - 5 checker tests for async: E063 ref param rejection, E062 UI-affine namespace rejection, E064 await non-task rejection, async call returns Task, await returns payload+error.
 
-## [0] - 31-05-2026
+## [0.0.1] - 31-05-2026
 
 ### Added
 
@@ -106,11 +119,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `internal/checker/checker.go`: `asyncPayloadType` now checks `RecordType.Name == "Error"` instead of matching any `RecordType` when stripping trailing `Error?` from async return tuples
 
-## [0] - 30-05-2026
+## [0.0.1] - 30-05-2026
 
 - Added `docs/superpowers/specs/2026-05-31-threading-concurrency-design.md` documenting the proposed first threading/concurrency model: per-window UI actors, window-owned `ui func`s, `async func` tasks, `await`, sendable task boundaries, and cancel-on-close lifecycle semantics.
 
-## [0] - 28-05-2026
+## [0.0.1] - 28-05-2026
 
 ### Fixed
 
@@ -168,7 +181,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Diagnostics: error highlighting now spans the full token (e.g., `~~~~` for `true`) instead of a single character
 - Parser: `errorAt` now computes highlight span from token lexeme length
 
-## [0] - 27-05-2006
+## [0.0.1] - 27-05-2006
 
 ### Added
 

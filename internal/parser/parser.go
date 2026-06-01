@@ -32,6 +32,7 @@ type Parser struct {
 	pos         int
 	diagnostics *diagnostics.Diagnostics
 	loopDepth   int
+	uiDepth     int
 }
 
 // New creates a parser for tokens.
@@ -211,7 +212,13 @@ func (p *Parser) parseFuncDecl(pub, async, ui bool) *ast.FuncDecl {
 			fn.ReturnTypes = append(fn.ReturnTypes, p.parseType(true))
 		}
 	}
-	fn.Body = p.parseBlock()
+	if ui {
+		p.uiDepth++
+		fn.Body = p.parseUIBlock()
+		p.uiDepth--
+	} else {
+		fn.Body = p.parseBlock()
+	}
 	return fn
 }
 
@@ -309,6 +316,136 @@ func (p *Parser) parseBlock() []ast.Stmt {
 	return body
 }
 
+// parseUIBlock parses a block inside a ui func body.
+// It dispatches to parseComponentDecl when it sees IDENT[IDENT]: pattern,
+// otherwise falls back to parseStmt for regular statements.
+func (p *Parser) parseUIBlock() []ast.Stmt {
+	p.expect(token.COLON, "':' before block")
+	p.expect(token.NEWLINE, "newline after ':'")
+	p.expect(token.INDENT, "indented block")
+
+	var body []ast.Stmt
+	for !p.check(token.DEDENT) && !p.atEnd() {
+		p.skipNewlines()
+		if p.check(token.DEDENT) || p.atEnd() {
+			break
+		}
+		// Check for component declaration: IDENT LBRACKET IDENT RBRACKET
+		if p.isComponentDeclAhead() {
+			comp := p.parseComponentDecl()
+			if comp != nil {
+				body = append(body, comp)
+			}
+			continue
+		}
+		stmt := p.parseStmt()
+		if stmt != nil {
+			body = append(body, stmt)
+		}
+	}
+	p.expect(token.DEDENT, "dedent after block")
+	return body
+}
+
+// isComponentDeclAhead checks if the current position starts a component declaration.
+// Pattern: IDENT LBRACKET IDENT RBRACKET
+func (p *Parser) isComponentDeclAhead() bool {
+	if !p.check(token.IDENT) {
+		return false
+	}
+	if p.pos+2 >= len(p.tokens) {
+		return false
+	}
+	return p.tokens[p.pos+1].Kind == token.LBRACKET && p.tokens[p.pos+2].Kind == token.IDENT
+}
+
+// parseComponentDecl parses a UI component declaration.
+// Syntax: ComponentType[id]:
+//
+//	prop = value
+//	on event = handler
+//	ChildType[child_id]:
+//	    ...
+func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
+	compTok := p.advance() // component type name
+	component := compTok.Lexeme
+
+	p.expect(token.LBRACKET, "'[' after component type")
+	idTok := p.expect(token.IDENT, "component id")
+	p.expect(token.RBRACKET, "']' after component id")
+
+	comp := &ast.ComponentDecl{
+		CompPos:   compTok.Pos,
+		Component: component,
+		ID:        idTok.Lexeme,
+	}
+
+	p.expect(token.COLON, "':' after component header")
+	p.expect(token.NEWLINE, "newline after ':'")
+	p.expect(token.INDENT, "indented component body")
+
+	for !p.check(token.DEDENT) && !p.atEnd() {
+		p.skipNewlines()
+		if p.check(token.DEDENT) || p.atEnd() {
+			break
+		}
+
+		// Event binding: on <event> = <handler>
+		if p.check(token.ON) && p.checkNext(token.IDENT) {
+			ev := p.parseEventBinding()
+			if ev != nil {
+				comp.Events = append(comp.Events, ev)
+			}
+			continue
+		}
+
+		// Child component: IDENT LBRACKET IDENT RBRACKET
+		if p.isComponentDeclAhead() {
+			child := p.parseComponentDecl()
+			if child != nil {
+				comp.Children = append(comp.Children, child)
+			}
+			continue
+		}
+
+		// Property assignment: IDENT = expr
+		if p.check(token.IDENT) && p.checkNext(token.EQ) {
+			prop := p.parseComponentProp()
+			if prop != nil {
+				comp.Props = append(comp.Props, prop)
+			}
+			continue
+		}
+
+		p.errorAt(p.peek(), "E013", "expected property, event binding, or child component", "use 'prop = value', 'on event = handler', or 'ChildType[id]:'")
+		p.synchronize()
+	}
+
+	p.expect(token.DEDENT, "dedent after component body")
+	return comp
+}
+
+// parseComponentProp parses a property assignment inside a component block.
+// Syntax: name = value
+func (p *Parser) parseComponentProp() *ast.ComponentProp {
+	nameTok := p.expect(token.IDENT, "property name")
+	p.expect(token.EQ, "'=' after property name")
+	value := p.parseExpression(precLowest)
+	p.consumeTerminator()
+	return &ast.ComponentProp{PropPos: nameTok.Pos, Name: nameTok.Lexeme, Value: value}
+}
+
+// parseEventBinding parses an event handler binding inside a component block.
+// Syntax: on event = handler
+func (p *Parser) parseEventBinding() *ast.EventBinding {
+	onTok := p.expect(token.ON, "'on' keyword")
+	eventTok := p.expect(token.IDENT, "event name")
+	p.expect(token.EQ, "'=' after event name")
+	handler := p.parseExpression(precLowest)
+	p.consumeTerminator()
+	return &ast.EventBinding{OnPos: onTok.Pos, Event: eventTok.Lexeme, Handler: handler}
+}
+
 func (p *Parser) parseStmt() ast.Stmt {
 	p.skipNewlines()
 	switch p.peek().Kind {
@@ -350,6 +487,11 @@ func (p *Parser) parseStmt() ast.Stmt {
 		return &ast.ContinueStmt{ContinuePos: cont.Pos}
 	case token.CONST:
 		return p.parseConstDecl()
+	case token.ON:
+		p.errorAt(p.peek(), "E013", "'on' event binding outside component block", "place event bindings inside a Component[id]: block")
+		p.advance()
+		p.synchronize()
+		return nil
 	case token.IDENT:
 		if p.checkNext(token.COLON) {
 			return p.parseVarDecl()
@@ -955,7 +1097,7 @@ func (p *Parser) synchronize() {
 		case token.NEWLINE:
 			p.advance()
 			return
-		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT:
+		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT, token.ON:
 			return
 		}
 		p.advance()

@@ -6,6 +6,7 @@ package checker
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/LealLang/leallang/internal/ast"
 	"github.com/LealLang/leallang/internal/diagnostics"
@@ -14,12 +15,14 @@ import (
 
 // Checker performs semantic analysis on an AST.
 type Checker struct {
-	program     *ast.Program
-	diag        *diagnostics.Diagnostics
-	scope       *Scope
-	global      *Scope
-	pkgPath     string
-	inAsyncFunc bool
+	program      *ast.Program
+	diag         *diagnostics.Diagnostics
+	scope        *Scope
+	global       *Scope
+	pkgPath      string
+	inAsyncFunc  bool
+	inUIFunc     bool
+	componentIDs map[string]token.Position // scoped per ui func
 }
 
 // Check performs semantic analysis on the given program.
@@ -236,12 +239,22 @@ func (c *Checker) checkFuncDecl(d *ast.FuncDecl) {
 	prevAsync := c.inAsyncFunc
 	c.inAsyncFunc = d.Async
 
+	// Set UI context for body checking.
+	prevUI := c.inUIFunc
+	prevIDs := c.componentIDs
+	if d.UI {
+		c.inUIFunc = true
+		c.componentIDs = make(map[string]token.Position)
+	}
+
 	// Check body.
 	for _, stmt := range d.Body {
 		c.checkStmt(stmt, sig.ReturnType)
 	}
 
 	c.inAsyncFunc = prevAsync
+	c.inUIFunc = prevUI
+	c.componentIDs = prevIDs
 	c.scope = prevScope
 }
 
@@ -692,6 +705,8 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 		case *ComponentType:
 			if prop, ok := t.Properties[fn.Field]; ok {
 				calleeType = prop.Type
+			} else if t.Primary != nil && t.Primary.Name == fn.Field {
+				calleeType = t.Primary.Type
 			} else {
 				calleeType = baseType
 			}
@@ -868,6 +883,9 @@ func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
 		if prop, ok := t.Properties[f.Field]; ok {
 			return prop.Type
 		}
+		if t.Primary != nil && t.Primary.Name == f.Field {
+			return t.Primary.Type
+		}
 		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
 		return nil
 	default:
@@ -1014,6 +1032,125 @@ func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
 	return nil
 }
 
+// checkComponentDecl checks a UI component declaration.
+func (c *Checker) checkComponentDecl(decl *ast.ComponentDecl) {
+	if !c.inUIFunc {
+		c.error(decl.CompPos, 0, "E013", "component declaration outside ui function", "component declarations are only allowed inside ui func bodies")
+		return
+	}
+
+	// Look up the component type.
+	sym := c.global.Lookup(decl.Component)
+	if sym == nil {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", decl.Component), "")
+		return
+	}
+	ct, ok := sym.Type.(*ComponentType)
+	if !ok {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("'%s' is not a component type", decl.Component), "")
+		return
+	}
+
+	// Check for duplicate component ID.
+	if firstPos, exists := c.componentIDs[decl.ID]; exists {
+		c.error(decl.CompPos, 0, "E070",
+			fmt.Sprintf("duplicate component id '%s' in this scope", decl.ID),
+			fmt.Sprintf("first defined at line %d", firstPos.Line))
+		return
+	}
+	c.componentIDs[decl.ID] = decl.CompPos
+
+	// Validate properties.
+	for _, prop := range decl.Props {
+		// Check if it's a regular property.
+		propInfo, exists := ct.Properties[prop.Name]
+		if !exists {
+			// Check if it's the primary parameter.
+			if ct.Primary != nil && ct.Primary.Name == prop.Name {
+				propInfo = ct.Primary
+			} else {
+				c.error(prop.PropPos, 0, "E072",
+					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, decl.Component),
+					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
+				continue
+			}
+		}
+		valType := c.checkExpr(prop.Value)
+		if valType != nil && !IsAssignable(valType, propInfo.Type) {
+			c.error(prop.Value.Pos(), 0, "E022",
+				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
+				"")
+		}
+	}
+
+	// Validate event bindings.
+	for _, ev := range decl.Events {
+		eventType, exists := ct.Events[ev.Event]
+		if !exists {
+			c.error(ev.OnPos, 0, "E073",
+				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, decl.Component),
+				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
+			continue
+		}
+
+		// Resolve handler name.
+		handlerIdent, ok := ev.Handler.(*ast.Ident)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
+			continue
+		}
+		handlerSym := c.scope.Lookup(handlerIdent.Name)
+		if handlerSym == nil {
+			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
+			continue
+		}
+		handlerSig, ok := handlerSym.Type.(*FuncSignature)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
+			continue
+		}
+
+		// Validate handler signature: must have 0 params or 1 param matching event type.
+		if len(handlerSig.Params) > 1 {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) == 1 {
+			paramType := handlerSig.Params[0].Type
+			if !IsAssignable(eventType, paramType) {
+				c.error(ev.Handler.Pos(), 0, "E074",
+					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
+						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
+			}
+		}
+	}
+
+	// Recurse into children.
+	for _, child := range decl.Children {
+		c.checkComponentDecl(child)
+	}
+}
+
+// propertyNames returns a comma-separated list of property names for diagnostics.
+func propertyNames(props map[string]*ParamInfo) string {
+	names := make([]string, 0, len(props))
+	for name := range props {
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// eventNames returns a comma-separated list of event names for diagnostics.
+func eventNames(events map[string]Type) string {
+	names := make([]string, 0, len(events))
+	for name := range events {
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
+}
+
 // checkStmt checks a statement.
 func (c *Checker) checkStmt(stmt ast.Stmt, returnType Type) {
 	if stmt == nil {
@@ -1036,6 +1173,8 @@ func (c *Checker) checkStmt(stmt ast.Stmt, returnType Type) {
 		c.checkVarDecl(s)
 	case *ast.ConstDecl:
 		c.checkConstDecl(s)
+	case *ast.ComponentDecl:
+		c.checkComponentDecl(s)
 	case *ast.PassStmt, *ast.BreakStmt, *ast.ContinueStmt:
 		// Valid, no checking needed.
 	}
