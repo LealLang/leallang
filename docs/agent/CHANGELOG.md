@@ -4,6 +4,20 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0] - 01-06-2026
+
+### Changed
+
+- Split `internal/interpreter/interpreter_test.go` (3,220 lines) into 8 focused test files:
+  - `test_helpers_test.go` (102 lines) — shared test infrastructure (runSource, safeWriter, etc.)
+  - `async_test.go` (506 lines) — 26 tests for async/await, TaskVal, and cloneForTask
+  - `value_test.go` (307 lines) — 11 tests for value types, Signal, JSON conversion
+  - `expressions_test.go` (444 lines) — 35 tests for arithmetic, comparisons, logical ops
+  - `control_flow_test.go` (608 lines) — 41 tests for switch, loops, if/else
+  - `errors_and_builtins_test.go` (458 lines) — 36 tests for runtime errors and builtins
+  - `records_and_functions_test.go` (700 lines) — 45 tests for records, functions, strings
+  - `declarations_test.go` (170 lines) — 12 tests for const declarations and stub namespaces
+
 ## [0] - 31-05-2026
 
 ### Added
