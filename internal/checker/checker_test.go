@@ -882,3 +882,99 @@ func main():
 `)
 	requireNoErrors(t, diag)
 }
+
+// --- Additional async/await checker tests ---
+
+func TestAsyncAndUIMutuallyExclusive(t *testing.T) {
+	diag := checkSourceAllowParseErrors(t, `package app.main
+
+async ui func bad():
+    pass
+
+func main():
+    pass
+`)
+	requireErrorCode(t, diag, "E013")
+}
+
+func TestAsyncComponentRefRejected(t *testing.T) {
+	diag := checkSourceAllowParseErrors(t, `package app.main
+
+Window[main_win]:
+    Button[btn]:
+        text = "click"
+
+async func bad():
+    x = @Button[btn]
+
+func main():
+    pass
+`)
+	requireErrorCode(t, diag, "E061")
+}
+
+func TestAsyncConsoleAllowed(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+async func greet(name: string):
+    console.print_ln(name)
+
+func main():
+    pass
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestAsyncFileAllowed(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+async func read(path: string):
+    file.read_text(path)
+
+func main():
+    pass
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestAsyncCallsAsync(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+async func inner(x: int) -> int:
+    return x
+
+async func outer(x: int):
+    t = inner(x)
+    r = await t
+
+func main():
+    pass
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestAsyncVoidReturnType(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+async func do_nothing():
+    pass
+
+func main():
+    task = do_nothing()
+    result = await task
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestAwaitInNonAsyncOnTask(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+async func compute() -> int:
+    return 42
+
+func main():
+    task = compute()
+    result = await task
+`)
+	requireNoErrors(t, diag)
+}

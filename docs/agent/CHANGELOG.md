@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0] - 31-05-2026
 
+### Added
+
+- 15 interpreter tests for async/await and Task behaviors:
+  - 4 TaskVal unit tests: resolve/await, error resolve, type/string, await blocks until resolve
+  - 6 cloneForTask tests: primitives, null/enum, range, tuple deep-copy, nested structures, all non-sendable types rejected
+  - 5 async behavioral tests: void function, nested async calls, globals isolation, record-with-list deep copy, multiple awaits on same task
+- 7 checker tests for async/await:
+  - E013 async+ui mutual exclusion, E061 UI component ref rejection in async
+  - console/file allowed in async (non-UI-affine), async calling async allowed
+  - void async return type handling, await in non-async function on Task
+- ~80 interpreter coverage tests to reach 85% statement coverage:
+  - Value Type()/String() methods for all 20+ value types
+  - valuesEqual for all type combinations (int, float, string, bool, char, null, enum, list, dict, record, tuple, component ref, range)
+  - dictKey for all valid types (string, int, bool, char, enum) and invalid types
+  - valueToGo/goToValue round-trip conversions
+  - decodeJSONValue for all JSON types (null, bool, string, int, float, array, object)
+  - jsonNumberToValue for nested arrays, objects, and default fallback
+  - Signal.Error() for all signal kinds (return, break, continue, unknown)
+  - evalUnary: -int, -float, not bool, error paths
+  - evalLiteral: float, char, bool, null literals
+  - numericBinary: subtraction, multiplication, modulo, float ops, mixed int/float
+  - compareValues: all comparison operators on int and float
+  - evalField: record field access, namespace member, const group member
+  - evalIndex: string index, dict index, index out of bounds
+  - evalAssign: identifier, index, record field, new variable, const reassignment
+  - assignIndex: list and dict index assignment
+  - evalSwitchStmt/evalSwitchExpr: match, no match, wildcard, multiple cases
+  - evalIf: else-if, else branches
+  - evalLoop: step, while, if modifiers, break, continue, dict/list iteration
+  - builtins: file.write_text, file.exists, file.read_text error, json.parse success/error, json.stringify, system.env, system.args, console.print, stub namespace calls (window, msg, modal, toast)
+  - Constructor with explicit body, default field values, partial args
+  - Record methods with arguments, mutation, return values
+  - Ref parameters, nested function calls, recursive functions
+  - Call depth exceeded (E107), const declaration types (int, float, string, bool)
+  - Interpolated strings with expressions, string concatenation
+  - cloneForTask with non-sendable elements in list, dict, tuple containers
+  - discardWriter nil path
+
 ### Fixed
 
 - Async task runtime isolation: each `async func` now runs on a child `*Interpreter` with its own `globals`, `callDepth`, `exitCode`, `diag`, and `builtins` instead of sharing the parent's mutable state.
