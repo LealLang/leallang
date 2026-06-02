@@ -23,8 +23,8 @@ Window[main]:
 
         Button[save_btn]:
             text = "Save"
-            on click = handle_save
-            on hover = handle_hover
+            on_click = handle_save
+            on_hover = handle_hover
 
 func main():
     window.open(@Window[main])

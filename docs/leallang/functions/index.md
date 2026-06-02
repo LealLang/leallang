@@ -177,7 +177,7 @@ func load_config(path: string) -> Config, Error?:
     if err != null:
         return default_config(), err
 
-    config, parse_err = json.parse<Config>(text)
+    config, parse_err = json.parse(text)
     if parse_err != null:
         return default_config(), parse_err
 
@@ -198,7 +198,7 @@ async func load_settings(path: string) -> Settings, Error?:
     if err != null:
         return Settings(theme: "light", autosave: false), err
 
-    settings, parse_err = json.parse<Settings>(text)
+    settings, parse_err = json.parse(text)
     return settings, parse_err
 ```
 
@@ -272,7 +272,7 @@ Regular (non-UI) functions can also be declared inside a `Window[...]` block. Th
 ```python
 Window[main]:
     title = "App"
-    on resize = handle_resize
+    on_resize = handle_resize
 
     ui func handle_save():
         @Label[title].text = "Saved!"
@@ -352,7 +352,7 @@ For an `async func` that only returns `Error?`, awaiting yields just the error v
 
 ```python
 async func save_settings_to_disk(settings: Settings) -> Error?:
-    text, err = json.stringify<Settings>(settings)
+    text, err = json.stringify(settings)
     if err != null:
         return err
 

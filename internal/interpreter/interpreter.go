@@ -106,7 +106,7 @@ func (interp *Interpreter) NewChild(taskEnv *Env) *Interpreter {
 		types:     interp.types, // read-only after init
 		stdout:    interp.stdout,
 		stderr:    interp.stderr,
-		args:      interp.args, // read-only after init
+		args:      interp.args,      // read-only after init
 		uiBackend: interp.uiBackend, // shared with parent
 	}
 	child.registerBuiltins()
@@ -625,6 +625,10 @@ func (interp *Interpreter) evalField(expr *ast.FieldExpr, env *Env) (Value, erro
 		return nil, err
 	}
 	switch v := base.(type) {
+	case *ListVal:
+		return interp.listMethod(v, expr.Field, expr.Dot)
+	case *DictVal:
+		return interp.dictMethod(v, expr.Field, expr.Dot)
 	case *RecordVal:
 		if val, ok := v.Fields[expr.Field]; ok {
 			return val, nil

@@ -141,7 +141,7 @@ Window[main]:
 
     Button[save_btn]:
         text = "Save"
-        on click = handle_save
+        on_click = handle_save
 
 func main():
     pass
@@ -179,7 +179,7 @@ Window[main]:
 
     Button[save_btn]:
         text = "Save"
-        on click = handle_save
+        on_click = handle_save
 
 func main():
     handle_save()

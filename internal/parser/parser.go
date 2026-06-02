@@ -372,7 +372,7 @@ func (p *Parser) isComponentDeclAhead() bool {
 // Syntax: ComponentType[id]:
 //
 //	prop = value
-//	on event = handler
+//	on_event = handler
 //	ui func name():
 //	    ...
 //	ChildType[child_id]:
@@ -389,6 +389,11 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 		CompPos:   compTok.Pos,
 		Component: component,
 		ID:        idTok.Lexeme,
+	}
+
+	if !p.check(token.COLON) {
+		p.consumeTerminator()
+		return comp
 	}
 
 	p.expect(token.COLON, "':' after component header")
@@ -438,8 +443,14 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 			continue
 		}
 
-		// Event binding: on <event> = <handler>
-		if p.check(token.ON) && p.checkNext(token.IDENT) {
+		// Migration diagnostic for the old event binding syntax: on <event> = <handler>
+		if p.isOldEventBindingAhead() {
+			p.reportOldEventBinding()
+			continue
+		}
+
+		// Event binding: on_<event> = <handler>
+		if p.isEventBindingAhead() {
 			ev := p.parseEventBinding()
 			if ev != nil {
 				comp.Events = append(comp.Events, ev)
@@ -456,8 +467,8 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 			continue
 		}
 
-		// Property assignment: IDENT = expr
-		if p.check(token.IDENT) && p.checkNext(token.EQ) {
+		// Property assignment: name = expr
+		if p.isComponentPropAhead() {
 			prop := p.parseComponentProp()
 			if prop != nil {
 				comp.Props = append(comp.Props, prop)
@@ -465,7 +476,7 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 			continue
 		}
 
-		p.errorAt(p.peek(), "E088", "expected property, event binding, ui func, or child component", "use 'prop = value', 'on event = handler', 'ui func', or 'ChildType[id]:'")
+		p.errorAt(p.peek(), "E088", "expected property, event binding, ui func, or child component", "use 'prop = value', 'on_event = handler', 'ui func', or 'ChildType[id]:'")
 		p.synchronize()
 	}
 
@@ -477,10 +488,62 @@ func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
 	return comp
 }
 
+func (p *Parser) isComponentPropAhead() bool {
+	return p.isComponentPropName(p.peek()) && p.checkNext(token.EQ)
+}
+
+func (p *Parser) isComponentPropName(tok token.Token) bool {
+	switch tok.Kind {
+	case token.IDENT, token.STEP, token.TYPE:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *Parser) isEventBindingAhead() bool {
+	if !p.check(token.IDENT) || !p.checkNext(token.EQ) {
+		return false
+	}
+	return eventNameFromBinding(p.peek().Lexeme) != ""
+}
+
+func eventNameFromBinding(name string) string {
+	if !strings.HasPrefix(name, "on_") || len(name) <= len("on_") {
+		return ""
+	}
+	return strings.TrimPrefix(name, "on_")
+}
+
+func (p *Parser) isOldEventBindingAhead() bool {
+	return p.check(token.IDENT) && p.peek().Lexeme == "on" && p.checkNext(token.IDENT)
+}
+
+func (p *Parser) reportOldEventBinding() {
+	onTok := p.advance()
+	eventTok := p.expect(token.IDENT, "event name")
+	hint := fmt.Sprintf("use on_%s = handler", eventTok.Lexeme)
+	if p.check(token.EQ) {
+		p.advance()
+		if handler, ok := p.peekAsIdent(); ok {
+			hint = fmt.Sprintf("use on_%s = %s", eventTok.Lexeme, handler.Lexeme)
+		}
+	}
+	p.errorAt(onTok, "E089", "old event binding syntax 'on event = handler' is no longer supported", hint)
+	p.synchronize()
+}
+
+func (p *Parser) peekAsIdent() (token.Token, bool) {
+	if p.check(token.IDENT) {
+		return p.peek(), true
+	}
+	return token.Token{}, false
+}
+
 // parseComponentProp parses a property assignment inside a component block.
 // Syntax: name = value
 func (p *Parser) parseComponentProp() *ast.ComponentProp {
-	nameTok := p.expect(token.IDENT, "property name")
+	nameTok := p.advance()
 	p.expect(token.EQ, "'=' after property name")
 	value := p.parseExpression(precLowest)
 	p.consumeTerminator()
@@ -488,14 +551,14 @@ func (p *Parser) parseComponentProp() *ast.ComponentProp {
 }
 
 // parseEventBinding parses an event handler binding inside a component block.
-// Syntax: on event = handler
+// Syntax: on_event = handler
 func (p *Parser) parseEventBinding() *ast.EventBinding {
-	onTok := p.expect(token.ON, "'on' keyword")
-	eventTok := p.expect(token.IDENT, "event name")
-	p.expect(token.EQ, "'=' after event name")
+	nameTok := p.expect(token.IDENT, "event binding name")
+	eventName := eventNameFromBinding(nameTok.Lexeme)
+	p.expect(token.EQ, "'=' after event binding name")
 	handler := p.parseExpression(precLowest)
 	p.consumeTerminator()
-	return &ast.EventBinding{OnPos: onTok.Pos, Event: eventTok.Lexeme, Handler: handler}
+	return &ast.EventBinding{BindPos: nameTok.Pos, Name: nameTok.Lexeme, Event: eventName, Handler: handler}
 }
 
 func (p *Parser) parseStmt() ast.Stmt {
@@ -539,12 +602,11 @@ func (p *Parser) parseStmt() ast.Stmt {
 		return &ast.ContinueStmt{ContinuePos: cont.Pos}
 	case token.CONST:
 		return p.parseConstDecl()
-	case token.ON:
-		p.errorAt(p.peek(), "E089", "'on' event binding outside component block", "place event bindings inside a Component[id]: block")
-		p.advance()
-		p.synchronize()
-		return nil
 	case token.IDENT:
+		if p.peek().Lexeme == "on" && p.checkNext(token.IDENT) {
+			p.reportOldEventBinding()
+			return nil
+		}
 		if p.checkNext(token.COLON) {
 			return p.parseVarDecl()
 		}
@@ -1141,12 +1203,18 @@ func (p *Parser) skipNewlines() {
 }
 
 func (p *Parser) synchronize() {
+	start := p.pos
+	defer func() {
+		if p.pos == start && !p.atEnd() {
+			p.advance()
+		}
+	}()
 	for !p.atEnd() {
 		if p.previous().Kind == token.NEWLINE {
 			// If we're already at a stop-token, advance past it to avoid
 			// getting stuck in a loop when the caller can't handle it.
 			switch p.peek().Kind {
-			case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT, token.ON:
+			case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT:
 				p.advance()
 				return
 			}
@@ -1156,7 +1224,8 @@ func (p *Parser) synchronize() {
 		case token.NEWLINE:
 			p.advance()
 			return
-		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT, token.ON:
+		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT:
+			p.advance()
 			return
 		}
 		p.advance()

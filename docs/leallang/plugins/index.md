@@ -32,7 +32,7 @@ my_plugin.llpkg
       "template": "color_picker.html",
       "styles": "color_picker.css",
       "properties": [
-        { "name": "value", "type": "string", "default": "#ffffffff" },
+        { "name": "value", "type": "Color", "default": "white" },
         { "name": "disabled", "type": "bool", "default": false }
       ],
       "events": [
@@ -89,8 +89,8 @@ Window[main_window]:
     title = "Plugin Example"
 
     ColorPicker[color_picker]:
-        value = "#ff0000ff"
-        on change = color_changed
+        value = colors.red
+        on_change = color_changed
 
 func color_changed():
     console.print_ln(@ColorPicker[color_picker].value)

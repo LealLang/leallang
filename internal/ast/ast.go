@@ -343,7 +343,8 @@ type ComponentProp struct {
 
 // EventBinding represents an event handler binding inside a component block.
 type EventBinding struct {
-	OnPos   token.Position
+	BindPos token.Position
+	Name    string
 	Event   string
 	Handler Expr // Ident referencing a function name
 }
@@ -677,12 +678,12 @@ func (p *ComponentProp) End() token.Position {
 	}
 	return endOfName(p.PropPos, p.Name)
 }
-func (e *EventBinding) Pos() token.Position { return e.OnPos }
+func (e *EventBinding) Pos() token.Position { return e.BindPos }
 func (e *EventBinding) End() token.Position {
 	if e.Handler != nil {
 		return e.Handler.End()
 	}
-	return endOfName(e.OnPos, "on "+e.Event)
+	return endOfName(e.BindPos, e.Name)
 }
 func (r *RangeExpr) Pos() token.Position   { return nodePos(r.Low) }
 func (r *RangeExpr) End() token.Position   { return nodeEnd(r.High) }

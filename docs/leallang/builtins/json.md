@@ -4,17 +4,15 @@ The `json` namespace provides JSON parsing and serialization.
 
 ## parse
 
-Parses a JSON string into a typed value.
+Parses a JSON string into an `any` value.
 
 ```python
-config, err = json.parse<Config>(text)
-if err != null:
-    console.print_ln(err.message)
+result = json.parse(text)
 ```
 
 **Signature:**
 ```python
-json.parse<T>(value: string) -> T, Error?
+json.parse(value: string) -> (any, Error?)
 ```
 
 ## stringify
@@ -22,12 +20,10 @@ json.parse<T>(value: string) -> T, Error?
 Serializes a value to a JSON string.
 
 ```python
-text, err = json.stringify<Config>(config)
-if err != null:
-    console.print_ln(err.message)
+result = json.stringify(config)
 ```
 
 **Signature:**
 ```python
-json.stringify<T>(value: T) -> string, Error?
+json.stringify(value: any) -> (string, Error?)
 ```

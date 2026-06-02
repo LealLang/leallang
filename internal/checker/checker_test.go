@@ -578,6 +578,59 @@ func main():
 	requireNoErrors(t, diag)
 }
 
+func TestListMethodsTypeCheck(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func main():
+    xs: List<int> = [1, 2]
+    xs.push(3)
+    last: int = xs.pop()
+    xs.insert(1, 9)
+    removed: bool = xs.remove(2)
+    idx: int = xs.index_of(9)
+    ok: bool = xs.has_index(0)
+    count: int = xs.count()
+    xs.clear()
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestListMethodElementTypeMismatch(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func main():
+    xs: List<int> = [1, 2]
+    xs.push("bad")
+`)
+	requireErrorCode(t, diag, "E022")
+}
+
+func TestDictMethodsTypeCheck(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func main():
+    scores: Dict<string, int> = {"Ana": 10}
+    has: bool = scores.has_key("Ana")
+    added: bool = scores.try_add("Bob", 11)
+    changed: bool = scores.try_set("Ana", 12)
+    removed: bool = scores.try_remove("Bob")
+    count: int = scores.count()
+    result: any = scores.get("Ana")
+    scores.clear()
+`)
+	requireNoErrors(t, diag)
+}
+
+func TestDictMethodValueTypeMismatch(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func main():
+    scores: Dict<string, int> = {"Ana": 10}
+    scores.try_set("Ana", "bad")
+`)
+	requireErrorCode(t, diag, "E022")
+}
+
 func TestListIndexTypeError(t *testing.T) {
 	diag := checkSource(t, `package app.main
 
@@ -1046,7 +1099,7 @@ Window[main]:
 
     Button[btn]:
         text = "Save"
-        on unknown_event = handle_save
+        on_unknown_event = handle_save
 `)
 	requireErrorCode(t, diag, "E073")
 }
@@ -1063,7 +1116,7 @@ Window[main]:
 
     Button[btn]:
         text = "Save"
-        on click = handle_save
+        on_click = handle_save
 `)
 	requireNoErrors(t, diag)
 
@@ -1078,7 +1131,7 @@ Window[main]:
 
     Button[btn]:
         text = "Save"
-        on click = handle_click
+        on_click = handle_click
 `)
 	requireNoErrors(t, diag)
 }
@@ -1094,9 +1147,234 @@ Window[main]:
 
     Button[btn]:
         text = "Save"
-        on click = handle_save
+        on_click = handle_save
 `)
 	requireErrorCode(t, diag, "E074")
+}
+
+func TestComponentEventHandlerReturnRejected(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func handle_save() -> int:
+    return 1
+
+Window[main]:
+    title = "App"
+
+    Button[btn]:
+        text = "Save"
+        on_click = handle_save
+`)
+	requireErrorCode(t, diag, "E074")
+}
+
+func TestRegistryV1CanonicalComponents(t *testing.T) {
+	diag := checkSource(t, `package app.main
+
+func handle_click(event: ClickEvent):
+    pass
+
+func handle_hover(event: HoverEvent):
+    pass
+
+func handle_leave(event: LeaveEvent):
+    pass
+
+func handle_change(event: ChangeEvent):
+    pass
+
+func handle_focus(event: FocusEvent):
+    pass
+
+func handle_scroll(event: ScrollEvent):
+    pass
+
+func handle_resize(event: ResizeEvent):
+    pass
+
+rows: List<Dict<string, string>> = [{"name": "Ana"}]
+cols: List<string> = ["name"]
+choices: List<string> = ["Light", "Dark"]
+menu_options: Dict<string, string> = {"open": "Open"}
+
+Window[main]:
+    title = "App"
+    w = 800
+    h = 600
+    bg = colors.white
+    on_resize = handle_resize
+
+    Row[row]:
+        gap = 8
+        dock = dock.fill
+
+        Button[save]:
+            text = "Save"
+            enabled = true
+            tooltip = "Save"
+            bg = colors.blue
+            on_click = handle_click
+            on_hover = handle_hover
+            on_leave = handle_leave
+
+        Label[label]:
+            text = "Title"
+            color = colors.black
+            font_weight = font_weight.bold
+            text_align = text_align.center
+
+        Checkbox[check]:
+            label = "Enabled"
+            checked = true
+            enabled = true
+            on_change = handle_change
+
+        Toggle[toggle]:
+            label = "Dark"
+            on = false
+            enabled = true
+            on_change = handle_change
+
+    Col[col]:
+        gap = 4
+
+        TextInput[input]:
+            value = "hello"
+            placeholder = "Name"
+            on_change = handle_change
+            on_focus = handle_focus
+
+        TextArea[area]:
+            value = "notes"
+            placeholder = "Notes"
+            on_change = handle_change
+            on_focus = handle_focus
+
+        Slider[slider]:
+            value = 0.5
+            min = 0.0
+            max = 1.0
+            step = 0.1
+            on_change = handle_change
+
+        Dropdown[dropdown]:
+            options = choices
+            selected = 0
+            on_change = handle_change
+
+        RadioButton[radio]:
+            label = "Choice"
+            selected = false
+            on_change = handle_change
+
+        NumberInput[number]:
+            value = 1.0
+            min = 0.0
+            max = 10.0
+            step = 1.0
+            on_change = handle_change
+
+        DatePicker[date]:
+            value = "2026-06-02"
+            on_change = handle_change
+
+        ColorPicker[color]:
+            value = colors.blue
+            on_change = handle_change
+
+    Grid[grid]:
+        cols = 2
+        rows = 3
+        gap = 6
+
+        Panel[panel]:
+            label = "Panel"
+            bg = colors.gray
+
+        Image[image]:
+            src = "logo.png"
+
+        ProgressBar[progress]:
+            value = 0.5
+            min = 0.0
+            max = 1.0
+
+        Line[line]:
+            orientation = orientation.horizontal
+            thickness = 2
+            size = 100
+            color = colors.gray
+
+    ScrollPanel[scroll]:
+        scroll_mode = scroll_mode.vertical
+        on_scroll = handle_scroll
+
+    ResizablePanel[resizable]:
+        min_w = 200
+        min_h = 100
+        on_resize = handle_resize
+
+    StackLayout[stack]:
+        orientation = orientation.vertical
+
+    Tabs[tabs]:
+        on_change = handle_change
+
+        Tab[general]:
+            title = "General"
+
+    MenuBar[menubar]:
+        dock = dock.top
+
+        Menu[file]:
+            label = "File"
+
+            MenuItem[open]:
+                text = "Open"
+                shortcut = "Ctrl+O"
+                on_click = handle_click
+
+            MenuSeparator[sep]
+
+    ContextMenu[ctx]:
+
+        MenuItem[copy]:
+            text = "Copy"
+            on_click = handle_click
+
+    Toolbar[toolbar]:
+        dock = dock.top
+
+        Button[tool]:
+            text = "Run"
+            on_click = handle_click
+
+    Modal[modal]:
+        title = "Confirm"
+        w = 400
+        h = 240
+
+    Table[table]:
+        data = rows
+        columns = cols
+        sortable = true
+        sort_order = sort_order.ascending
+
+    TreeView[tree]:
+        dock = dock.left
+
+    Splitter[splitter]:
+        orientation = orientation.horizontal
+
+    ListView[list]:
+        items = choices
+        item_height = 24
+
+    Notify[notify]:
+        position = dock.top
+        message = "Saved"
+`)
+	requireNoErrors(t, diag)
 }
 
 func TestComponentOnlyInUIFunc(t *testing.T) {

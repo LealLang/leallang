@@ -40,9 +40,9 @@ Window[main_window]:
 
         Button[settings_button]:
             text = "Settings"
-            on click = settings_clicked
-            on hover = settings_hovered
-            on leave = settings_left
+            on_click = settings_clicked
+            on_hover = settings_hovered
+            on_leave = settings_left
 
     Panel[content_area]:
         bg = colors.white
@@ -53,7 +53,7 @@ Window[main_window]:
 
         Button[ok_button]:
             text = "OK"
-            on click = ok_clicked
+            on_click = ok_clicked
 
 func settings_clicked():
     settings.open()
@@ -114,16 +114,16 @@ Window[settings_window]:
                 text = "Theme"
             TextInput[theme_input]:
                 placeholder = "light"
-                on change = theme_changed
-                on focus = on_focus
+                on_change = theme_changed
+                on_focus = on_focus
 
         Checkbox[autosave_box]:
             label = "Autosave"
-            on change = autosave_changed
+            on_change = autosave_changed
 
         Button[save_button]:
             text = "Save"
-            on click = save_clicked
+            on_click = save_clicked
 
 func theme_changed(e: ChangeEvent):
     draft_theme = @TextInput[theme_input].value
@@ -172,14 +172,14 @@ pub func load(path: string) -> Settings, Error?:
     if err != null:
         return Settings(theme: "light", autosave: false), err
 
-    config, parse_err = json.parse<Settings>(text)
+    config, parse_err = json.parse(text)
     if parse_err != null:
         return Settings(theme: "light", autosave: false), parse_err
 
     return config, null
 
 pub func save(path: string, config: Settings) -> Error?:
-    text, err = json.stringify<Settings>(config)
+    text, err = json.stringify(config)
     if err != null:
         return err
 

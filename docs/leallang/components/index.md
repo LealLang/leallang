@@ -61,7 +61,7 @@ pub Window[settings]:
 
     Button[close_button]:
         text = "Close"
-        on click = close_clicked
+        on_click = close_clicked
 ```
 
 Opening and closing windows is done through the `window` namespace.
@@ -94,14 +94,14 @@ Window[main]:
 
     Button[open_settings]:
         text = "Settings"
-        on click = open_settings_clicked
+        on_click = open_settings_clicked
 
 Window[settings]:
     title = "Settings"
 
     Button[save_button]:
         text = "Save"
-        on click = save_settings_clicked
+        on_click = save_settings_clicked
 ```
 
 If `save_settings_clicked` runs slow code, only the Settings window is blocked. The Main window keeps responding.
@@ -179,7 +179,7 @@ Regular (non-UI) functions can also be declared inside a `Window[...]` block. Th
 ```python
 Window[main]:
     title = "App"
-    on resize = handle_resize
+    on_resize = handle_resize
 
     ui func handle_save():
         @Label[title].text = "Saved!"
@@ -217,7 +217,7 @@ Window[settings]:
 
     Button[save_button]:
         text = "Save"
-        on click = save_settings_clicked
+        on_click = save_settings_clicked
 
 func save_settings_clicked():
     settings, err = collect_settings()
@@ -252,7 +252,7 @@ Window[main_window]:
 
         Button[save_button]:
             text = "Save"
-            on click = save_clicked
+            on_click = save_clicked
 ```
 
 Component IDs are unique per window.
@@ -281,7 +281,7 @@ Properties are declared as indented `key = value` lines inside the component blo
 Button[save_button]:
     text = "Save"
     enabled = true
-    on click = save_clicked
+    on_click = save_clicked
 
 Grid[button_grid]:
     cols = 3
@@ -350,18 +350,16 @@ Window[settings]:
 
     Button[close_button]:
         text = "Close"
-        on click = close_clicked
+        on_click = close_clicked
 
 func close_clicked():
     @Button[close_button].text = "Closing"
 ```
 
-UI references can be used as argument values.
+Window references can be used as argument values outside `ui func` bodies.
 
 ```python
-Button[target_button]:
-    text = "Right-click me"
-    context_menu = @ContextMenu[action_menu]
+window.open(@Window[settings])
 ```
 
 ### Invalid UI References
@@ -393,7 +391,7 @@ Events are declared with the `on event = handler` syntax inside the component bl
 ```python
 Button[save_button]:
     text = "Save"
-    on click = save_clicked
+    on_click = save_clicked
 ```
 
 An event handler can omit the event parameter.
@@ -415,7 +413,7 @@ The event parameter type must match the event's declared event type.
 ```python
 Button[save_button]:
     text = "Save"
-    on click = save_clicked
+    on_click = save_clicked
 
 func save_clicked(e: ResizeEvent): # invalid for click
     console.print_ln(e.width)
@@ -432,7 +430,7 @@ Event handler signatures are checked against event types.
 ```python
 Button[save_button]:
     text = "Save"
-    on click = save_clicked
+    on_click = save_clicked
 
 func save_clicked(e: ClickEvent):
     console.print_ln(e.button)

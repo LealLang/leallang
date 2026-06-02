@@ -74,7 +74,7 @@ pub func load(path: string) -> Config, Error?:
     if err != null:
         return Config(theme: "light", autosave: false), err
 
-    config, parse_err = json.parse<Config>(text)
+    config, parse_err = json.parse(text)
     if parse_err != null:
         return Config(theme: "light", autosave: false), parse_err
 

@@ -20,7 +20,7 @@ Example:
 
 ```python
 Tabs[main_tabs]:
-    on change = tab_changed
+    on_change = tab_changed
 
     Panel[home_tab]:
         label = "Home"
@@ -59,20 +59,20 @@ MenuBar[main_menu]:
 
         MenuItem[open_item]:
             text = "Open"
-            on click = open_clicked
+            on_click = open_clicked
         MenuItem[save_item]:
             text = "Save"
-            on click = save_clicked
+            on_click = save_clicked
         MenuSeparator[file_separator]
         MenuItem[exit_item]:
             text = "Exit"
-            on click = exit_clicked
+            on_click = exit_clicked
     Menu[help_menu]:
         label = "Help"
 
         MenuItem[about_item]:
             text = "About"
-            on click = about_clicked
+            on_click = about_clicked
 ```
 
 ## Menu
@@ -98,7 +98,7 @@ Menu[file_menu]:
 
     MenuItem[open_item]:
         text = "Open"
-        on click = open_clicked
+        on_click = open_clicked
 ```
 
 ## MenuItem
@@ -122,7 +122,7 @@ Example:
 ```python
 MenuItem[save_item]:
     text = "Save"
-    on click = save_clicked
+    on_click = save_clicked
 ```
 
 ## MenuSeparator
@@ -165,15 +165,14 @@ Example:
 ```python
 Button[target_button]:
     text = "Right-click me"
-    context_menu = @ContextMenu[action_menu]
 
 ContextMenu[action_menu]:
     MenuItem[copy_item]:
         text = "Copy"
-        on click = copy_clicked
+        on_click = copy_clicked
     MenuItem[paste_item]:
         text = "Paste"
-        on click = paste_clicked
+        on_click = paste_clicked
 ```
 
 ## Toolbar
@@ -200,17 +199,17 @@ Toolbar[main_toolbar]:
 
     Button[new_button]:
         text = "New"
-        on click = new_clicked
+        on_click = new_clicked
     Button[open_button]:
         text = "Open"
-        on click = open_clicked
+        on_click = open_clicked
     Line[toolbar_divider]:
         orientation = orientation.vertical
         thickness = 1
         color = colors.black
     Button[save_button]:
         text = "Save"
-        on click = save_clicked
+        on_click = save_clicked
 ```
 
 ## Modal
@@ -242,10 +241,10 @@ Modal[confirm_modal]:
 
         Button[yes_button]:
             text = "Yes"
-            on click = confirm_clicked
+            on_click = confirm_clicked
         Button[no_button]:
             text = "No"
-            on click = cancel_clicked
+            on_click = cancel_clicked
 ```
 
 Open and close:
@@ -281,7 +280,7 @@ rows: List<Dict<string, string>> = [
 
 Table[users_table]:
     data = rows
-    on click = row_clicked
+    on_click = row_clicked
 ```
 
 ## Shared Properties

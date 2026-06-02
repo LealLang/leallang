@@ -4,6 +4,37 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.1] - 02-06-2026
+
+### Changed
+
+- Replaced UI event bindings with the new `on_<event> = handler` syntax:
+  - `internal/token/token.go`: `on` is no longer lexed as a keyword, allowing it to be used as a normal property name such as `Toggle.on`
+  - `internal/parser/parser.go`: `on_<event>` now parses as an event binding; old `on event = handler` emits a migration diagnostic with the new spelling
+  - `internal/ast/ast.go`: Event binding positions now use neutral binding names rather than `OnPos`
+  - Updated UI IR tests, examples, and LealLang docs to use `on_click`, `on_hover`, `on_change`, and related event names
+- Split the UI component surface into a registry:
+  - `internal/checker/ui_registry.go`: Centralizes component names, primary properties, properties, events, and shared UI types
+  - `internal/checker/builtins.go`: Delegates component registration to the UI registry
+  - Canonicalized component names and properties including `Checkbox.label`, `Toggle.on`, `Grid.cols`, `Line.thickness`, `Menu.label`, `Table.data`, and `Window.on_resize`
+- Updated docs to match implemented built-ins:
+  - `json.parse` and `json.stringify` are documented as non-generic tuple-returning functions
+  - Removed `any.as<T>()` examples until generic method calls are implemented
+  - Color properties now document typed `Color` constants instead of hex string color literals
+
+### Added
+
+- Collection methods for lists and dictionaries:
+  - `internal/checker/collection_methods.go`: Adds typed signatures for `List<T>.push/pop/insert/remove/index_of/has_index/count/clear`
+  - `internal/checker/collection_methods.go`: Adds typed signatures for `Dict<string, V>.has_key/try_add/try_set/try_remove/count/clear/get`
+  - `internal/interpreter/collection_methods.go`: Adds native runtime implementations for list and dictionary methods
+- Parser support for empty UI component declarations such as `MenuSeparator[sep]`.
+
+### Fixed
+
+- Event handler validation now rejects handlers that return a value.
+- Parser recovery now guarantees progress when synchronizing after component block errors, preventing no-progress loops on invalid component-body tokens.
+
 ## [0.0.1] - 01-06-2026
 
 ### Fixed

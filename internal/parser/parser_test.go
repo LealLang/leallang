@@ -739,7 +739,7 @@ Window[main]:
 
     Button[save_btn]:
         text = "Save"
-        on click = handle_save
+        on_click = handle_save
 `)
 	requireNoErrors(t, diag)
 	comp, ok := program.Decls[0].(*ast.ComponentDecl)
@@ -763,6 +763,90 @@ Window[main]:
 	}
 	if handler.Name != "handle_save" {
 		t.Fatalf("handler name = %q, want handle_save", handler.Name)
+	}
+}
+
+func TestOldComponentEventSyntaxDiagnostic(t *testing.T) {
+	_, diag := parseSource(t, `package app.main
+
+Window[main]:
+    title = "App"
+
+    Button[save_btn]:
+        text = "Save"
+        on click = handle_save
+`)
+	requireErrorCode(t, diag, "E089")
+	foundHint := false
+	for _, err := range diag.Errors() {
+		if err.Code == "E089" && strings.Contains(err.Hint, "use on_click = handle_save") {
+			foundHint = true
+			break
+		}
+	}
+	if !foundHint {
+		t.Fatalf("missing migration hint, got:\n%s", diag.Format())
+	}
+}
+
+func TestComponentOnPropertyStillParses(t *testing.T) {
+	program, diag := parseSource(t, `package app.main
+
+Window[main]:
+    title = "App"
+
+    Toggle[dark_mode]:
+        on = true
+`)
+	requireNoErrors(t, diag)
+	toggle := program.Decls[0].(*ast.ComponentDecl).Children[0]
+	if len(toggle.Props) != 1 || toggle.Props[0].Name != "on" {
+		t.Fatalf("props = %#v, want on property", toggle.Props)
+	}
+}
+
+func TestEmptyComponentDeclParses(t *testing.T) {
+	program, diag := parseSource(t, `package app.main
+
+Window[main]:
+    title = "App"
+
+    MenuBar[menu]:
+        Menu[file]:
+            label = "File"
+            MenuSeparator[sep]
+`)
+	requireNoErrors(t, diag)
+	menu := program.Decls[0].(*ast.ComponentDecl).Children[0].Children[0]
+	if len(menu.Children) != 1 {
+		t.Fatalf("menu children count = %d, want 1", len(menu.Children))
+	}
+	sep := menu.Children[0]
+	if sep.Component != "MenuSeparator" || sep.ID != "sep" {
+		t.Fatalf("component = %s[%s], want MenuSeparator[sep]", sep.Component, sep.ID)
+	}
+	if len(sep.Props) != 0 || len(sep.Children) != 0 || len(sep.Events) != 0 {
+		t.Fatalf("empty component has body content: %#v", sep)
+	}
+}
+
+func TestUnknownOnUnderscoreEventParsesForChecker(t *testing.T) {
+	program, diag := parseSource(t, `package app.main
+
+Window[main]:
+    title = "App"
+
+    Button[save_btn]:
+        text = "Save"
+        on_unknown_event = handle_save
+`)
+	requireNoErrors(t, diag)
+	btn := program.Decls[0].(*ast.ComponentDecl).Children[0]
+	if len(btn.Events) != 1 {
+		t.Fatalf("events count = %d, want 1", len(btn.Events))
+	}
+	if btn.Events[0].Event != "unknown_event" {
+		t.Fatalf("event = %q, want unknown_event", btn.Events[0].Event)
 	}
 }
 
@@ -857,7 +941,7 @@ Window[main]:
 
         Button[save_btn]:
             text = "Save"
-            on click = handle_save
+            on_click = handle_save
 `)
 	requireNoErrors(t, diag)
 	if len(program.Decls) != 1 {

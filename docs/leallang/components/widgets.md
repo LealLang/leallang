@@ -10,7 +10,7 @@ Properties:
 - `dock: Dock?`
 - `w: int?`
 - `h: int?`
-- `color`: a `Color` value or hex color literal string
+- `color: Color`
 - `tooltip: string?`
 
 Events:
@@ -67,9 +67,9 @@ Image[remote_image]:
 
 Properties:
 
-- `value: int`
-- `min: int = 0`
-- `max: int = 100`
+- `value: float`
+- `min: float`
+- `max: float`
 - `w: int?`
 - `h: int?`
 
@@ -85,9 +85,9 @@ Example:
 
 ```python
 ProgressBar[load_bar]:
-    value = 75
-    min = 0
-    max = 100
+    value = 0.75
+    min = 0.0
+    max = 1.0
 ```
 
 ## Button
@@ -116,7 +116,7 @@ Example:
 ```python
 Button[save_button]:
     text = "Save"
-    on click = save_clicked
+    on_click = save_clicked
 
 Button[help_button]:
     text = "Help"
@@ -147,7 +147,7 @@ Example:
 ```python
 TextInput[name_input]:
     placeholder = "Enter your name"
-    on change = name_changed
+    on_change = name_changed
 ```
 
 Access current value:
@@ -181,7 +181,7 @@ TextArea[notes_area]:
     placeholder = "Write notes here"
     w = 400
     h = 600
-    on change = notes_changed
+    on_change = notes_changed
 ```
 
 Access current value:
@@ -211,7 +211,7 @@ Example:
 ```python
 Checkbox[agree_box]:
     label = "I agree"
-    on change = agreement_changed
+    on_change = agreement_changed
 ```
 
 Access checked state:
@@ -247,7 +247,7 @@ options: Dict<string, string> = {
 
 RadioButton[difficulty_radio]:
     options = options
-    on change = difficulty_changed
+    on_change = difficulty_changed
 ```
 
 Access selection:
@@ -278,7 +278,8 @@ Example:
 ```python
 Toggle[dark_mode_toggle]:
     label = "Dark Mode"
-    on change = dark_mode_changed
+    on = false
+    on_change = dark_mode_changed
 ```
 
 Access state:
@@ -291,10 +292,10 @@ is_on = @Toggle[dark_mode_toggle].on
 
 Properties:
 
-- `value: int?`
-- `min: int`
-- `max: int`
-- `step: int = 1`
+- `value: float`
+- `min: float`
+- `max: float`
+- `step: float`
 
 Events:
 
@@ -308,10 +309,11 @@ Example:
 
 ```python
 Slider[volume_slider]:
-    min = 0
-    max = 100
-    step = 1
-    on change = volume_changed
+    value = 0.5
+    min = 0.0
+    max = 1.0
+    step = 0.1
+    on_change = volume_changed
 ```
 
 Access value:
@@ -325,7 +327,7 @@ volume = @Slider[volume_slider].value
 Properties:
 
 - `options: List<string>`
-- `selected: string?`
+- `selected: int`
 
 Events:
 
@@ -341,17 +343,17 @@ Example:
 choices: List<string> = ["Light", "Dark", "System"]
 Dropdown[theme_dropdown]:
     options = choices
-    on change = theme_changed
+    on_change = theme_changed
 ```
 
 ## NumberInput
 
 Properties:
 
-- `value: int?`
-- `min: int?`
-- `max: int?`
-- `step: int = 1`
+- `value: float`
+- `min: float?`
+- `max: float?`
+- `step: float`
 
 Events:
 
@@ -365,10 +367,11 @@ Example:
 
 ```python
 NumberInput[retry_count]:
-    min = 0
-    max = 10
-    step = 1
-    on change = retry_changed
+    value = 1.0
+    min = 0.0
+    max = 10.0
+    step = 1.0
+    on_change = retry_changed
 ```
 
 ## Shared Widget Properties
@@ -390,7 +393,7 @@ Button[help_button]:
     tooltip = "Open help"
 ```
 
-Color properties accept typed color constants or hex color literal strings.
+Color properties accept typed color constants.
 
 ```python
 Label[title_label]:
@@ -399,5 +402,5 @@ Label[title_label]:
 
 Label[warning_label]:
     text = "Warning"
-    color = "#ff0000ff"
+    color = colors.red
 ```

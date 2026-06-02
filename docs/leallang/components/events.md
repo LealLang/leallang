@@ -1,13 +1,13 @@
 # Events
 
-Events are connected by declaring `on event = handler` inside the component block.
+Events are connected by declaring `on_<event> = handler` inside the component block.
 
 ```python
 Button[save_button]:
     text = "Save"
-    on click = save_clicked
-    on hover = save_hovered
-    on leave = save_left
+    on_click = save_clicked
+    on_hover = save_hovered
+    on_leave = save_left
 ```
 
 An event handler can use either no event parameter or one matching event parameter.
@@ -27,7 +27,7 @@ The event parameter type must match the event's declared event type.
 ```python
 Button[save_button]:
     text = "Save"
-    on click = save_clicked
+    on_click = save_clicked
 
 func save_clicked(e: ResizeEvent): # invalid for click
     console.print_ln(e.width)

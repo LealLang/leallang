@@ -57,7 +57,7 @@ Window[main_window]:
 
     Button[settings_button]:
         text = "Settings"
-        on click = open_settings
+        on_click = open_settings
 
 func open_settings():
     settings.open()

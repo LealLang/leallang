@@ -228,7 +228,6 @@ var keywords = map[string]TokenKind{
 	"async":    ASYNC,
 	"await":    AWAIT,
 	"ui":       UI,
-	"on":       ON,
 }
 
 // LookupKeyword returns the TokenKind for a keyword, or IDENT if it is not a keyword.

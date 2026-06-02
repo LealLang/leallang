@@ -22,7 +22,7 @@ type Checker struct {
 	pkgPath       string
 	inAsyncFunc   bool
 	inUIFunc      bool
-	componentIDs  map[string]token.Position // scoped per ui func
+	componentIDs  map[string]token.Position  // scoped per ui func
 	windowMethods map[string]map[string]bool // windowID -> set of ui func names
 }
 
@@ -120,7 +120,7 @@ func (c *Checker) validateComponentEvents(ct *ComponentType, events []*ast.Event
 	for _, ev := range events {
 		eventType, exists := ct.Events[ev.Event]
 		if !exists {
-			c.error(ev.OnPos, 0, "E073",
+			c.error(ev.BindPos, 0, "E073",
 				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, componentName),
 				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
 			continue
@@ -144,6 +144,11 @@ func (c *Checker) validateComponentEvents(ct *ComponentType, events []*ast.Event
 		if len(handlerSig.Params) > 1 {
 			c.error(ev.Handler.Pos(), 0, "E074",
 				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
+			continue
+		}
+		if handlerSig.ReturnType != nil {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' must not return a value", handlerIdent.Name), "")
 			continue
 		}
 		if len(handlerSig.Params) == 1 {
@@ -889,6 +894,13 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 				c.error(fn.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", t.Name, fn.Field), "")
 				return nil
 			}
+		case *GenericType:
+			if method := collectionMethodSignature(t, fn.Field, c.global); method != nil {
+				sig = method
+			} else {
+				c.error(fn.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", FormatType(t), fn.Field), "")
+				return nil
+			}
 		case *ComponentType:
 			if prop, ok := t.Properties[fn.Field]; ok {
 				calleeType = prop.Type
@@ -1082,6 +1094,12 @@ func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
 			return method
 		}
 		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
+		return nil
+	case *GenericType:
+		if method := collectionMethodSignature(t, f.Field, c.global); method != nil {
+			return method
+		}
+		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", FormatType(t), f.Field), "")
 		return nil
 	case *NamespaceType:
 		if member, ok := t.Members[f.Field]; ok {

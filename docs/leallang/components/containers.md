@@ -6,7 +6,7 @@ Containers organize child components. They use indented properties for layout, s
 
 Properties:
 
-- `bg`: a `Color` value or hex color literal string
+- `bg: Color`
 - `dock: Dock?`
 - `w: int?`
 - `h: int?`
@@ -174,7 +174,7 @@ Example:
 ```python
 ScrollPanel[scroll_area]:
     dock = dock.fill
-    on scroll = on_scroll
+    on_scroll = on_scroll
 
     Label[item_label]:
         text = "Scrollable content"
@@ -218,7 +218,7 @@ Properties:
 
 - `orientation: Orientation`
 - `thickness: int = 1`
-- `color`: a `Color` value or hex color literal string
+- `color: Color`
 - `size: int?`
 
 Events:
@@ -241,6 +241,6 @@ Line[divider]:
 Line[vertical_divider]:
     orientation = orientation.vertical
     thickness = 2
-    color = "#ccccccff"
+    color = colors.gray
     size = 500
 ```

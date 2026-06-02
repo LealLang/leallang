@@ -95,7 +95,7 @@ Dict<string, int>
 Generic calls place type arguments before the call arguments.
 
 ```python
-config, err = json.parse<Config>(text)
+config, err = json.parse(text)
 ```
 
 ## Indexing
@@ -279,9 +279,9 @@ color = switch color_name:
 
 Statement switch arms use `:`. See [Control Flow](../functions/control-flow.md).
 
-## `any` Checks and Extraction
+## `any` Checks
 
-Values of type `any` require explicit narrowing or checked extraction before assignment to a concrete type.
+Values of type `any` require explicit narrowing before assignment to a concrete type.
 
 ```python
 value: any = "hello"
@@ -294,14 +294,6 @@ Narrowing with `is`:
 if value is string:
     name: string = value
     console.print_ln(name)
-```
-
-Checked extraction with `.as<T>()`:
-
-```python
-number, ok = value.as<int>()
-if ok:
-    console.print_ln(number)
 ```
 
 Silent assignment from `any` to a concrete type is invalid.
