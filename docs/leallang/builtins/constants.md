@@ -21,11 +21,14 @@ Examples:
 - `colors.white` has type `Color`.
 - `colors.blue` has type `Color`.
 
-Color properties accept named color constants or hex color literal strings.
+Color properties accept named color constants.
 
 ```python
-Panel[main_panel](bg: colors.white)
-Panel[content_panel](bg: "#f5f5f5ff")
+Panel[main_panel]:
+    bg = colors.white
+
+Panel[content_panel]:
+    bg = colors.gray
 ```
 
 ## dock

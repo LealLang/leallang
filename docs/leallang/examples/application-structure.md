@@ -50,8 +50,14 @@ package app.main
 
 import app.settings
 
-Window[main_window]("MyApp", w: 900, h: 600):
-    Button[settings_button]("Settings", click: open_settings)
+Window[main_window]:
+    title = "MyApp"
+    w = 900
+    h = 600
+
+    Button[settings_button]:
+        text = "Settings"
+        on_click = open_settings
 
 func open_settings():
     settings.open()

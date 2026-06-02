@@ -32,7 +32,7 @@ my_plugin.llpkg
       "template": "color_picker.html",
       "styles": "color_picker.css",
       "properties": [
-        { "name": "value", "type": "string", "default": "#ffffffff" },
+        { "name": "value", "type": "Color", "default": "white" },
         { "name": "disabled", "type": "bool", "default": false }
       ],
       "events": [
@@ -85,8 +85,12 @@ package app.main
 
 import plugin.my_uikit
 
-Window[main_window]("Plugin Example"):
-    ColorPicker[color_picker](value: "#ff0000ff", change: color_changed)
+Window[main_window]:
+    title = "Plugin Example"
+
+    ColorPicker[color_picker]:
+        value = colors.red
+        on_change = color_changed
 
 func color_changed():
     console.print_ln(@ColorPicker[color_picker].value)

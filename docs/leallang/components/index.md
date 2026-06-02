@@ -4,22 +4,17 @@ LealLang UI is declared as an indented tree of windows and components.
 
 ## Syntax Forms
 
-Component declarations create UI nodes.
+Component declarations create UI nodes using a block syntax with indented properties.
 
 ```python
-Button[save_button]("Save")
+Button[save_button]:
+    text = "Save"
 ```
 
 UI references access existing UI nodes.
 
 ```python
 @Button[save_button].text = "Saved"
-```
-
-Window-qualified UI references access components through a specific window.
-
-```python
-@Window[settings].Button[close_button].text = "Close"
 ```
 
 Collection indexing uses the same `[]` characters on values.
@@ -42,11 +37,16 @@ Component IDs are not normal variables. They are identifiers inside the UI tree 
 
 ## Windows
 
-Windows are declared declaratively.
+Windows are declared declaratively using a block with indented properties.
 
 ```python
-Window[main_window]("MyApp", w: 900, h: 600):
-    Label[title_label]("Hello")
+Window[main_window]:
+    title = "MyApp"
+    w = 900
+    h = 600
+
+    Label[title_label]:
+        text = "Hello"
 ```
 
 Window IDs are unique within a package.
@@ -54,8 +54,14 @@ Window IDs are unique within a package.
 A window can be public.
 
 ```python
-pub Window[settings]("Settings", w: 600, h: 400):
-    Button[close_button]("Close", click: close_clicked)
+pub Window[settings]:
+    title = "Settings"
+    w = 600
+    h = 400
+
+    Button[close_button]:
+        text = "Close"
+        on_click = close_clicked
 ```
 
 Opening and closing windows is done through the `window` namespace.
@@ -83,11 +89,19 @@ Each `Window[...]` owns a UI actor. A UI actor is the serialized event queue for
 If one window runs slow synchronous code in one of its handlers, only that window's actor is blocked. Other windows keep processing their own events because they have separate actors.
 
 ```python
-Window[main]("Main"):
-    Button[open_settings]("Settings", click: open_settings_clicked)
+Window[main]:
+    title = "Main"
 
-Window[settings]("Settings"):
-    Button[save_button]("Save", click: save_settings_clicked)
+    Button[open_settings]:
+        text = "Settings"
+        on_click = open_settings_clicked
+
+Window[settings]:
+    title = "Settings"
+
+    Button[save_button]:
+        text = "Save"
+        on_click = save_settings_clicked
 ```
 
 If `save_settings_clicked` runs slow code, only the Settings window is blocked. The Main window keeps responding.
@@ -99,8 +113,11 @@ If `save_settings_clicked` runs slow code, only the Settings window is blocked. 
 A `ui func` is a UI-facing function owned by a specific window. It is declared inside the owning `Window[...]` block.
 
 ```python
-Window[main]("App"):
-    Label[theme_label]("Light")
+Window[main]:
+    title = "App"
+
+    Label[theme_label]:
+        text = "Light"
 
     pub ui func apply_settings(settings: Settings) -> Error?:
         @Label[theme_label].text = settings.theme
@@ -155,6 +172,27 @@ func save_clicked():
     window.close(@Window[settings])
 ```
 
+### Regular func inside Window
+
+Regular (non-UI) functions can also be declared inside a `Window[...]` block. These are local helper functions useful for event handlers and internal logic.
+
+```python
+Window[main]:
+    title = "App"
+    on_resize = handle_resize
+
+    ui func handle_save():
+        @Label[title].text = "Saved!"
+
+    func handle_resize():
+        console.print_ln("Window resized")
+```
+
+- A bare `func` inside a Window block is private to that window.
+- It does not run on the window actor (unlike `ui func`).
+- It cannot use `@ComponentRef[id]` syntax to mutate UI components.
+- It can be used as an event handler via `on event = handler_name`.
+
 ---
 
 ## Cross-window Communication
@@ -166,14 +204,20 @@ type Settings:
     pub theme: string
     pub autosave: bool
 
-Window[main]("App"):
+Window[main]:
+    title = "App"
+
     pub ui func apply_settings(settings: Settings) -> Error?:
         app_settings = settings
         @Label[theme_label].text = settings.theme
         return null
 
-Window[settings]("Settings"):
-    Button[save_button]("Save", click: save_settings_clicked)
+Window[settings]:
+    title = "Settings"
+
+    Button[save_button]:
+        text = "Save"
+        on_click = save_settings_clicked
 
 func save_settings_clicked():
     settings, err = collect_settings()
@@ -195,12 +239,20 @@ This avoids global mutable state shared by multiple windows.
 
 ## Components
 
-Components are declared inside windows or other components.
+Components are declared inside windows or other components using block syntax.
 
 ```python
-Window[main_window]("MyApp"):
-    Panel[side_panel](bg: colors.white, dock: dock.left, w: 300):
-        Button[save_button]("Save", click: save_clicked)
+Window[main_window]:
+    title = "MyApp"
+
+    Panel[side_panel]:
+        bg = colors.white
+        dock = dock.left
+        w = 300
+
+        Button[save_button]:
+            text = "Save"
+            on_click = save_clicked
 ```
 
 Component IDs are unique per window.
@@ -208,36 +260,51 @@ Component IDs are unique per window.
 This is valid because the IDs belong to different windows:
 
 ```python
-Window[main_window]("Main"):
-    Button[save_button]("Save")
+Window[main]:
+    title = "Main"
 
-Window[settings]("Settings"):
-    Button[save_button]("Save")
+    Button[save_button]:
+        text = "Save"
+
+Window[settings]:
+    title = "Settings"
+
+    Button[save_button]:
+        text = "Save"
 ```
 
-## Component Arguments
+## Component Properties
 
-A component can use one positional argument only for its obvious primary value.
+Properties are declared as indented `key = value` lines inside the component block.
 
 ```python
-Button[save_button]("Save")
-Label[title_label]("Settings")
-Window[main_window]("MyApp", w: 900, h: 600)
+Button[save_button]:
+    text = "Save"
+    enabled = true
+    on_click = save_clicked
+
+Grid[button_grid]:
+    cols = 3
+    rows = 2
+    gap = 8
 ```
 
-Style, layout, sizing, behavior, and event arguments must be named.
+Properties are checked by name and type.
+
+A component property must exist.
 
 ```python
-Panel[side_panel](bg: colors.white, dock: dock.left, w: 240)
-Button[save_button]("Save", click: save_clicked)
-Grid[button_grid](cols: 3, rows: 2, gap: 8)
+Button[save_button]:
+    text = "Save"
+    unknown = true # invalid
 ```
 
-Unclear positional component arguments are invalid.
+A property value must match its declared type.
 
 ```python
-Panel[side_panel]("#ffffffff", dock.left, w: 400) # invalid
-Panel[side_panel](bg: "#ffffffff", dock: dock.left, w: 400) # valid
+Button[save_button]:
+    text = "Save"
+    enabled = "yes" # invalid
 ```
 
 ---
@@ -249,8 +316,11 @@ The `@` operator is used only to access UI windows and components.
 Declarations do not use `@`.
 
 ```python
-Window[settings]("Settings"):
-    Button[close_button]("Close")
+Window[settings]:
+    title = "Settings"
+
+    Button[close_button]:
+        text = "Close"
 ```
 
 Access uses `@`.
@@ -266,41 +336,30 @@ settings_window: Window = @Window[settings]
 save_button: Button = @Button[save_button]
 ```
 
-LealLang has two official UI reference forms.
-
-Local UI reference:
+UI references use the `@ComponentType[component_id]` form.
 
 ```python
 @ComponentType[component_id]
 ```
 
-Window-qualified UI reference:
+UI references are valid inside a function that is being used as an event handler for a specific window context.
 
 ```python
-@Window[window_id].ComponentType[component_id]
-```
+Window[settings]:
+    title = "Settings"
 
-Local UI references are valid inside a function that is being used as an event handler for a specific window context.
-
-```python
-Window[settings]("Settings"):
-    Button[close_button]("Close", click: close_clicked)
+    Button[close_button]:
+        text = "Close"
+        on_click = close_clicked
 
 func close_clicked():
     @Button[close_button].text = "Closing"
 ```
 
-Outside such a context, use window-qualified references.
+Window references can be used as argument values outside `ui func` bodies.
 
 ```python
-func load_settings():
-    @Window[settings].TextInput[theme_input].value = "dark"
-```
-
-UI references can be used as argument values.
-
-```python
-Button[target_button]("Right-click me", context_menu: @ContextMenu[action_menu])
+window.open(@Window[settings])
 ```
 
 ### Invalid UI References
@@ -314,8 +373,11 @@ Using a missing component ID is invalid.
 Using the wrong component type for an ID is invalid.
 
 ```python
-Window[settings]("Settings"):
-    TextInput[theme_input](placeholder: "Theme")
+Window[settings]:
+    title = "Settings"
+
+    TextInput[theme_input]:
+        placeholder = "Theme"
 
 @Button[theme_input].text = "Theme" # invalid
 ```
@@ -324,10 +386,12 @@ Window[settings]("Settings"):
 
 ## Event Handlers
 
-Events are assigned by passing function references to event properties.
+Events are declared with the `on event = handler` syntax inside the component block.
 
 ```python
-Button[save_button]("Save", click: save_clicked)
+Button[save_button]:
+    text = "Save"
+    on_click = save_clicked
 ```
 
 An event handler can omit the event parameter.
@@ -347,7 +411,9 @@ func save_clicked(e: ClickEvent):
 The event parameter type must match the event's declared event type.
 
 ```python
-Button[save_button]("Save", click: save_clicked)
+Button[save_button]:
+    text = "Save"
+    on_click = save_clicked
 
 func save_clicked(e: ResizeEvent): # invalid for click
     console.print_ln(e.width)
@@ -359,28 +425,12 @@ Event handlers return no value unless a specific component event explicitly docu
 
 ## Component Type Checking
 
-Component properties are checked by name and type.
-
-```python
-Button[save_button]("Save", enabled: true, click: save_clicked)
-```
-
-A component property must exist.
-
-```python
-Button[save_button]("Save", unknown: true) # invalid
-```
-
-A property value must match its declared type.
-
-```python
-Button[save_button]("Save", enabled: "yes") # invalid
-```
-
 Event handler signatures are checked against event types.
 
 ```python
-Button[save_button]("Save", click: save_clicked)
+Button[save_button]:
+    text = "Save"
+    on_click = save_clicked
 
 func save_clicked(e: ClickEvent):
     console.print_ln(e.button)

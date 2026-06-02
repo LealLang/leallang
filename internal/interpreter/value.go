@@ -532,3 +532,24 @@ func errorRecord(message, code string) *RecordVal {
 		},
 	}
 }
+
+// valueToUI converts a LealLang runtime value to a Go-native value
+// suitable for the UI IR.
+func valueToUI(v Value) any {
+	switch val := v.(type) {
+	case IntVal:
+		return int64(val)
+	case FloatVal:
+		return float64(val)
+	case StringVal:
+		return string(val)
+	case BoolVal:
+		return bool(val)
+	case CharVal:
+		return rune(val)
+	case *EnumVal:
+		return val.Member
+	default:
+		return nil
+	}
+}

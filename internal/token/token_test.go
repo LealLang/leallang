@@ -35,6 +35,7 @@ func TestLookupKeyword(t *testing.T) {
 		{"my_variable", IDENT},
 		{"count", IDENT},
 		{"step_count", IDENT},
+		{"on", IDENT},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

@@ -2,21 +2,15 @@
 
 Widgets are leaf UI components. They do not accept child components unless their entry states otherwise.
 
-> [!NOTE]
-> Access examples using local `@Component[id]` assume they are inside an event handler for the window containing that component. Outside that context, use `@Window[window_id].ComponentType[component_id]`.
-
 ## Label
-
-Primary argument:
-
-- `text: string`
 
 Properties:
 
+- `text: string`
 - `dock: Dock?`
 - `w: int?`
 - `h: int?`
-- `color`: a `Color` value or hex color literal string
+- `color: Color`
 - `tooltip: string?`
 
 Events:
@@ -30,15 +24,15 @@ Children:
 Example:
 
 ```python
-Label[greeting_label]("Hello, world")
-Label[welcome_label]($"Welcome, {username}", dock: dock.center)
+Label[greeting_label]:
+    text = "Hello, world"
+
+Label[welcome_label]:
+    text = $"Welcome, {username}"
+    dock = dock.center
 ```
 
 ## Image
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -59,21 +53,23 @@ Children:
 Example:
 
 ```python
-Image[logo](src: "./logo.png", w: 200, h: 100)
-Image[remote_image](src: "https://example.com/image.png", dock: dock.fill)
+Image[logo]:
+    src = "./logo.png"
+    w = 200
+    h = 100
+
+Image[remote_image]:
+    src = "https://example.com/image.png"
+    dock = dock.fill
 ```
 
 ## ProgressBar
 
-Primary argument:
-
-- none
-
 Properties:
 
-- `value: int`
-- `min: int = 0`
-- `max: int = 100`
+- `value: float`
+- `min: float`
+- `max: float`
 - `w: int?`
 - `h: int?`
 
@@ -88,17 +84,17 @@ Children:
 Example:
 
 ```python
-ProgressBar[load_bar](value: 75, min: 0, max: 100)
+ProgressBar[load_bar]:
+    value = 0.75
+    min = 0.0
+    max = 1.0
 ```
 
 ## Button
 
-Primary argument:
-
-- `text: string`
-
 Properties:
 
+- `text: string`
 - `enabled: bool = true`
 - `tooltip: string?`
 - `dock: Dock?`
@@ -118,15 +114,16 @@ Children:
 Example:
 
 ```python
-Button[save_button]("Save", click: save_clicked)
-Button[help_button]("Help", tooltip: "Open help")
+Button[save_button]:
+    text = "Save"
+    on_click = save_clicked
+
+Button[help_button]:
+    text = "Help"
+    tooltip = "Open help"
 ```
 
 ## TextInput
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -148,7 +145,9 @@ Children:
 Example:
 
 ```python
-TextInput[name_input](placeholder: "Enter your name", change: name_changed)
+TextInput[name_input]:
+    placeholder = "Enter your name"
+    on_change = name_changed
 ```
 
 Access current value:
@@ -158,10 +157,6 @@ value = @TextInput[name_input].value
 ```
 
 ## TextArea
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -182,7 +177,11 @@ Children:
 Example:
 
 ```python
-TextArea[notes_area](placeholder: "Write notes here", w: 400, h: 600, change: notes_changed)
+TextArea[notes_area]:
+    placeholder = "Write notes here"
+    w = 400
+    h = 600
+    on_change = notes_changed
 ```
 
 Access current value:
@@ -192,10 +191,6 @@ notes = @TextArea[notes_area].value
 ```
 
 ## Checkbox
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -214,7 +209,9 @@ Children:
 Example:
 
 ```python
-Checkbox[agree_box](label: "I agree", change: agreement_changed)
+Checkbox[agree_box]:
+    label = "I agree"
+    on_change = agreement_changed
 ```
 
 Access checked state:
@@ -224,10 +221,6 @@ checked = @Checkbox[agree_box].checked
 ```
 
 ## RadioButton
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -252,7 +245,9 @@ options: Dict<string, string> = {
     "Hard": "hard"
 }
 
-RadioButton[difficulty_radio](options: options, change: difficulty_changed)
+RadioButton[difficulty_radio]:
+    options = options
+    on_change = difficulty_changed
 ```
 
 Access selection:
@@ -263,10 +258,6 @@ value = @RadioButton[difficulty_radio].selected_value
 ```
 
 ## Toggle
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -285,7 +276,10 @@ Children:
 Example:
 
 ```python
-Toggle[dark_mode_toggle](label: "Dark Mode", change: dark_mode_changed)
+Toggle[dark_mode_toggle]:
+    label = "Dark Mode"
+    on = false
+    on_change = dark_mode_changed
 ```
 
 Access state:
@@ -296,16 +290,12 @@ is_on = @Toggle[dark_mode_toggle].on
 
 ## Slider
 
-Primary argument:
-
-- none
-
 Properties:
 
-- `value: int?`
-- `min: int`
-- `max: int`
-- `step: int = 1`
+- `value: float`
+- `min: float`
+- `max: float`
+- `step: float`
 
 Events:
 
@@ -318,7 +308,12 @@ Children:
 Example:
 
 ```python
-Slider[volume_slider](min: 0, max: 100, step: 1, change: volume_changed)
+Slider[volume_slider]:
+    value = 0.5
+    min = 0.0
+    max = 1.0
+    step = 0.1
+    on_change = volume_changed
 ```
 
 Access value:
@@ -329,14 +324,10 @@ volume = @Slider[volume_slider].value
 
 ## Dropdown
 
-Primary argument:
-
-- none
-
 Properties:
 
 - `options: List<string>`
-- `selected: string?`
+- `selected: int`
 
 Events:
 
@@ -350,21 +341,19 @@ Example:
 
 ```python
 choices: List<string> = ["Light", "Dark", "System"]
-Dropdown[theme_dropdown](options: choices, change: theme_changed)
+Dropdown[theme_dropdown]:
+    options = choices
+    on_change = theme_changed
 ```
 
 ## NumberInput
 
-Primary argument:
-
-- none
-
 Properties:
 
-- `value: int?`
-- `min: int?`
-- `max: int?`
-- `step: int = 1`
+- `value: float`
+- `min: float?`
+- `max: float?`
+- `step: float`
 
 Events:
 
@@ -377,7 +366,12 @@ Children:
 Example:
 
 ```python
-NumberInput[retry_count](min: 0, max: 10, step: 1, change: retry_changed)
+NumberInput[retry_count]:
+    value = 1.0
+    min = 0.0
+    max = 10.0
+    step = 1.0
+    on_change = retry_changed
 ```
 
 ## Shared Widget Properties
@@ -385,18 +379,28 @@ NumberInput[retry_count](min: 0, max: 10, step: 1, change: retry_changed)
 Many widgets can use layout and sizing properties such as `dock`, `w`, and `h`.
 
 ```python
-Button[save_button]("Save", dock: dock.right, w: 120)
+Button[save_button]:
+    text = "Save"
+    dock = dock.right
+    w = 120
 ```
 
 Many widgets can use `tooltip`.
 
 ```python
-Button[help_button]("Help", tooltip: "Open help")
+Button[help_button]:
+    text = "Help"
+    tooltip = "Open help"
 ```
 
-Color properties accept typed color constants or hex color literal strings.
+Color properties accept typed color constants.
 
 ```python
-Label[title_label]("Settings", color: colors.black)
-Label[warning_label]("Warning", color: "#ff0000ff")
+Label[title_label]:
+    text = "Settings"
+    color = colors.black
+
+Label[warning_label]:
+    text = "Warning"
+    color = colors.red
 ```

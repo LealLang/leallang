@@ -16,6 +16,7 @@ import (
 	"github.com/LealLang/leallang/internal/ast"
 	"github.com/LealLang/leallang/internal/diagnostics"
 	"github.com/LealLang/leallang/internal/token"
+	"github.com/LealLang/leallang/internal/uiir"
 )
 
 // syncWriter wraps an io.Writer with a mutex for safe concurrent use.
@@ -43,6 +44,7 @@ type Interpreter struct {
 	args      []string
 	callDepth int
 	exitCode  int
+	uiBackend *uiir.Log // nil = stub mode, non-nil = record to log
 }
 
 func New(diag *diagnostics.Diagnostics) *Interpreter {
@@ -63,6 +65,12 @@ func (interp *Interpreter) SetOutput(stdout, stderr io.Writer) {
 
 func (interp *Interpreter) SetArgs(args []string) {
 	interp.args = append([]string(nil), args...)
+}
+
+// SetUIBackend sets the UI backend log for recording UI operations.
+// When set, UI operations are recorded to the log instead of printing stubs.
+func (interp *Interpreter) SetUIBackend(log *uiir.Log) {
+	interp.uiBackend = log
 }
 
 func (interp *Interpreter) ExitCode() int {
@@ -93,12 +101,13 @@ func (interp *Interpreter) NewChild(taskEnv *Env) *Interpreter {
 		}
 	}
 	child := &Interpreter{
-		diag:    diagnostics.New(),
-		globals: taskEnv,
-		types:   interp.types, // read-only after init
-		stdout:  interp.stdout,
-		stderr:  interp.stderr,
-		args:    interp.args, // read-only after init
+		diag:      diagnostics.New(),
+		globals:   taskEnv,
+		types:     interp.types, // read-only after init
+		stdout:    interp.stdout,
+		stderr:    interp.stderr,
+		args:      interp.args,      // read-only after init
+		uiBackend: interp.uiBackend, // shared with parent
 	}
 	child.registerBuiltins()
 	return child
@@ -123,6 +132,8 @@ func (interp *Interpreter) Run(program *ast.Program) error {
 			interp.globals.Set(d.Name, &FuncVal{Name: d.Name, Params: d.Params, Body: d.Body, Closure: interp.globals, Async: d.Async, UI: d.UI})
 		case *ast.TypeDecl:
 			interp.globals.Set(d.Name, &RecordTypeVal{Decl: d})
+		case *ast.ComponentDecl:
+			interp.registerComponentFuncs(d)
 		}
 	}
 	for _, decl := range program.Decls {
@@ -133,6 +144,10 @@ func (interp *Interpreter) Run(program *ast.Program) error {
 			}
 		case *ast.ConstDecl:
 			if _, err := interp.evalConstDecl(d, interp.globals); err != nil {
+				return err
+			}
+		case *ast.ComponentDecl:
+			if err := interp.evalComponentDecl(d, interp.globals, ""); err != nil {
 				return err
 			}
 		}
@@ -200,8 +215,7 @@ func (interp *Interpreter) evalExpr(expr ast.Expr, env *Env) (Value, error) {
 	case *ast.IndexExpr:
 		return interp.evalIndex(e, env)
 	case *ast.ComponentRefExpr:
-		fmt.Fprintf(interp.stderr, "[stub] UI component %s[%s] is not implemented\n", e.Component, e.ID)
-		return Null, nil
+		return &ComponentRefVal{Component: e.Component, ID: e.ID}, nil
 	case *ast.RangeExpr:
 		low, err := interp.evalExpr(e.Low, env)
 		if err != nil {
@@ -289,6 +303,8 @@ func (interp *Interpreter) evalStmt(stmt ast.Stmt, env *Env) (*Signal, error) {
 		return interp.evalSwitchStmt(s, env)
 	case *ast.LoopStmt:
 		return interp.evalLoop(s, env)
+	case *ast.ComponentDecl:
+		return nil, interp.evalComponentDecl(s, env, "")
 	default:
 		return nil, fmt.Errorf("unsupported statement %T", stmt)
 	}
@@ -609,6 +625,10 @@ func (interp *Interpreter) evalField(expr *ast.FieldExpr, env *Env) (Value, erro
 		return nil, err
 	}
 	switch v := base.(type) {
+	case *ListVal:
+		return interp.listMethod(v, expr.Field, expr.Dot)
+	case *DictVal:
+		return interp.dictMethod(v, expr.Field, expr.Dot)
 	case *RecordVal:
 		if val, ok := v.Fields[expr.Field]; ok {
 			return val, nil
@@ -632,6 +652,10 @@ func (interp *Interpreter) evalField(expr *ast.FieldExpr, env *Env) (Value, erro
 		}
 		return nil, interp.runtimeError("E100", expr.Dot, 0, fmt.Sprintf("const group %s has no member '%s'", v.Name, expr.Field), "")
 	case *ComponentRefVal:
+		// Look up ui func methods registered in the environment.
+		if val, ok := env.Get(expr.Field); ok {
+			return val, nil
+		}
 		fmt.Fprintf(interp.stderr, "[stub] UI property %s.%s is not implemented\n", v.String(), expr.Field)
 		return Null, nil
 	default:
@@ -754,7 +778,16 @@ func (interp *Interpreter) evalAssign(stmt *ast.AssignStmt, env *Env) error {
 		}
 		rec, ok := base.(*RecordVal)
 		if !ok {
-			if _, ok := base.(*ComponentRefVal); ok {
+			if compRef, ok := base.(*ComponentRefVal); ok {
+				if interp.uiBackend != nil {
+					interp.uiBackend.Record(uiir.Op{
+						Kind:      uiir.OpPropSet,
+						ID:        compRef.ID,
+						PropName:  target.Field,
+						PropValue: valueToUI(val),
+					})
+					return nil
+				}
 				fmt.Fprintf(interp.stderr, "[stub] UI assignment %s.%s is not implemented\n", base.String(), target.Field)
 				return nil
 			}
@@ -801,6 +834,76 @@ func (interp *Interpreter) assignIndex(target *ast.IndexExpr, val Value, env *En
 		return nil
 	default:
 		return interp.runtimeError("E101", target.LBrack, 0, "index assignment requires list or dict", "")
+	}
+}
+
+// evalComponentDecl evaluates a UI component declaration.
+// If a UI backend is set, it records mount, prop-set, and event-bind operations.
+// Otherwise, it prints a stub message.
+func (interp *Interpreter) evalComponentDecl(decl *ast.ComponentDecl, env *Env, parentID string) error {
+	if interp.uiBackend == nil {
+		fmt.Fprintf(interp.stderr, "[stub] UI component %s[%s] is not implemented\n", decl.Component, decl.ID)
+		return nil
+	}
+
+	// Mount the component.
+	interp.uiBackend.Record(uiir.Op{
+		Kind:      uiir.OpMount,
+		Component: decl.Component,
+		ID:        decl.ID,
+		ParentID:  parentID,
+	})
+
+	// Set properties.
+	for _, prop := range decl.Props {
+		val, err := interp.evalExpr(prop.Value, env)
+		if err != nil {
+			return err
+		}
+		interp.uiBackend.Record(uiir.Op{
+			Kind:      uiir.OpPropSet,
+			ID:        decl.ID,
+			PropName:  prop.Name,
+			PropValue: valueToUI(val),
+		})
+	}
+
+	// Bind events.
+	for _, ev := range decl.Events {
+		handlerName := ""
+		if ident, ok := ev.Handler.(*ast.Ident); ok {
+			handlerName = ident.Name
+		}
+		interp.uiBackend.Record(uiir.Op{
+			Kind:      uiir.OpEventBind,
+			ID:        decl.ID,
+			EventName: ev.Event,
+			HandlerID: handlerName,
+		})
+	}
+
+	// Register ui func declarations.
+	for _, fn := range decl.Funcs {
+		env.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: env, UI: fn.UI})
+	}
+
+	// Recurse into children.
+	for _, child := range decl.Children {
+		if err := interp.evalComponentDecl(child, env, decl.ID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// registerComponentFuncs registers ui func declarations from a component tree in the global scope.
+func (interp *Interpreter) registerComponentFuncs(decl *ast.ComponentDecl) {
+	for _, fn := range decl.Funcs {
+		interp.globals.Set(fn.Name, &FuncVal{Name: fn.Name, Params: fn.Params, Body: fn.Body, Closure: interp.globals, UI: fn.UI})
+	}
+	for _, child := range decl.Children {
+		interp.registerComponentFuncs(child)
 	}
 }
 

@@ -149,8 +149,9 @@ func TestIdentifiers(t *testing.T) {
 		{"_test", token.IDENT},
 		{"load_config", token.IDENT},
 		{"main_window", token.IDENT},
-		{"func_name", token.IDENT}, // not confused with FUNC keyword
+		{"func_name", token.IDENT},  // not confused with FUNC keyword
 		{"step_count", token.IDENT}, // not confused with STEP keyword
+		{"on", token.IDENT},
 	}
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
@@ -292,8 +293,8 @@ func TestDelimiters(t *testing.T) {
 func TestOperatorCombinations(t *testing.T) {
 	// Test that operators are not confused with each other
 	tests := []struct {
-		src     string
-		kinds   []token.TokenKind
+		src   string
+		kinds []token.TokenKind
 	}{
 		{"===", []token.TokenKind{token.EQ_EQ, token.EQ}},
 		{"!==", []token.TokenKind{token.BANG_EQ, token.EQ}},

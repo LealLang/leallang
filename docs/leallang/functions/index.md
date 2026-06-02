@@ -44,7 +44,7 @@ func load_settings():
         msg.error(err.message)
         return
 
-    @Window[settings].TextInput[theme_input].value = config_value.theme
+    @Window[settings].apply_config(config_value)
 ```
 
 ## Arguments
@@ -177,7 +177,7 @@ func load_config(path: string) -> Config, Error?:
     if err != null:
         return default_config(), err
 
-    config, parse_err = json.parse<Config>(text)
+    config, parse_err = json.parse(text)
     if parse_err != null:
         return default_config(), parse_err
 
@@ -198,7 +198,7 @@ async func load_settings(path: string) -> Settings, Error?:
     if err != null:
         return Settings(theme: "light", autosave: false), err
 
-    settings, parse_err = json.parse<Settings>(text)
+    settings, parse_err = json.parse(text)
     return settings, parse_err
 ```
 
@@ -232,9 +232,14 @@ Forbidden inside `async func`:
 A `ui func` is a UI-facing function owned by a specific window. It is declared inside the owning `Window[...]` block.
 
 ```python
-Window[main]("App"):
-    Label[theme_label]("Light")
-    Label[status_label]("Ready")
+Window[main]:
+    title = "App"
+
+    Label[theme_label]:
+        text = "Light"
+
+    Label[status_label]:
+        text = "Ready"
 
     pub ui func apply_settings(settings: Settings) -> Error?:
         @Label[theme_label].text = settings.theme
@@ -257,6 +262,31 @@ Cross-window calls use the existing UI reference form:
 ```
 
 This call queues work onto the target window actor and returns a `Task`. Awaiting is optional.
+
+---
+
+## func inside Window
+
+Regular (non-UI) functions can also be declared inside a `Window[...]` block. These are local helper functions that are not UI-facing and do not run on the window actor. They are useful for event handlers and internal logic.
+
+```python
+Window[main]:
+    title = "App"
+    on_resize = handle_resize
+
+    ui func handle_save():
+        @Label[title].text = "Saved!"
+
+    func handle_resize():
+        console.print_ln("Window resized")
+```
+
+Rules:
+
+- A bare `func` inside a Window block is private to that window.
+- It does not run on the window actor (unlike `ui func`).
+- It cannot use `@ComponentRef[id]` syntax to mutate UI components.
+- It can be used as an event handler via `on event = handler_name`.
 
 Fire-and-forget:
 
@@ -322,7 +352,7 @@ For an `async func` that only returns `Error?`, awaiting yields just the error v
 
 ```python
 async func save_settings_to_disk(settings: Settings) -> Error?:
-    text, err = json.stringify<Settings>(settings)
+    text, err = json.stringify(settings)
     if err != null:
         return err
 

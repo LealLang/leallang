@@ -32,6 +32,8 @@ type Parser struct {
 	pos         int
 	diagnostics *diagnostics.Diagnostics
 	loopDepth   int
+	uiDepth     int
+	windowDepth int
 }
 
 // New creates a parser for tokens.
@@ -128,22 +130,30 @@ func (p *Parser) parseTopLevelDecl() ast.Decl {
 	switch {
 	case p.check(token.FUNC):
 		if async && ui {
-			p.errorAt(p.previous(), "E013", "function cannot be both async and ui", "choose either async or ui")
+			p.errorAt(p.previous(), "E080", "function cannot be both async and ui", "choose either async or ui")
+		}
+		if ui {
+			p.errorAt(p.previous(), "E081", "ui func is only allowed inside a Window block", "move ui func inside a Window[...] block")
 		}
 		return p.parseFuncDecl(pub, async, ui)
 	case p.check(token.TYPE):
 		if async || ui {
-			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before type")
+			p.errorAt(p.previous(), "E082", "async/ui can only modify func declarations", "remove async/ui before type")
 		}
 		return p.parseTypeDecl()
 	case p.check(token.CONST):
 		if async || ui {
-			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before const")
+			p.errorAt(p.previous(), "E082", "async/ui can only modify func declarations", "remove async/ui before const")
 		}
 		return p.parseConstDecl()
 	case p.check(token.IDENT):
 		if async || ui {
-			p.errorAt(p.previous(), "E013", "async/ui can only modify func declarations", "remove async/ui before variable declarations")
+			p.errorAt(p.previous(), "E082", "async/ui can only modify func declarations", "remove async/ui before variable declarations")
+		}
+		// Component declaration: IDENT LBRACKET IDENT RBRACKET
+		if p.isComponentDeclAhead() {
+			stmt := p.parseComponentDecl()
+			return stmt
 		}
 		if p.checkNext(token.COLON) || p.checkNext(token.EQ) {
 			return p.parseVarDecl()
@@ -151,9 +161,9 @@ func (p *Parser) parseTopLevelDecl() ast.Decl {
 	}
 
 	if pub {
-		p.errorAt(p.previous(), "E013", "expected declaration after pub", "use pub before func, type, or const")
+		p.errorAt(p.previous(), "E083", "expected declaration after pub", "use pub before func, type, or const")
 	} else {
-		p.errorAt(p.peek(), "E013", fmt.Sprintf("expected top-level declaration, got %s", p.peek().Kind), "use func, type, const, import, or a variable declaration")
+		p.errorAt(p.peek(), "E084", fmt.Sprintf("expected top-level declaration, got %s", p.peek().Kind), "use func, type, const, import, or a variable declaration")
 	}
 	if !p.atEnd() {
 		p.advance()
@@ -185,7 +195,7 @@ func (p *Parser) parseConstDecl() *ast.ConstDecl {
 	if p.match(token.EQ) {
 		decl.Value = p.parseExpression(precLowest)
 	} else {
-		p.errorAt(p.peek(), "E013", "expected '=' in const declaration", "const declarations require a value")
+		p.errorAt(p.peek(), "E085", "expected '=' in const declaration", "const declarations require a value")
 	}
 	p.consumeTerminator()
 	return decl
@@ -211,7 +221,13 @@ func (p *Parser) parseFuncDecl(pub, async, ui bool) *ast.FuncDecl {
 			fn.ReturnTypes = append(fn.ReturnTypes, p.parseType(true))
 		}
 	}
-	fn.Body = p.parseBlock()
+	if ui {
+		p.uiDepth++
+		fn.Body = p.parseUIBlock()
+		p.uiDepth--
+	} else {
+		fn.Body = p.parseBlock()
+	}
 	return fn
 }
 
@@ -253,7 +269,7 @@ func (p *Parser) parseTypeDecl() *ast.TypeDecl {
 			decl.Fields = append(decl.Fields, p.parseFieldDecl(pub))
 			continue
 		}
-		p.errorAt(p.peek(), "E013", fmt.Sprintf("expected type member, got %s", p.peek().Kind), "use a field, constructor, or method")
+		p.errorAt(p.peek(), "E086", fmt.Sprintf("expected type member, got %s", p.peek().Kind), "use a field, constructor, or method")
 		p.synchronize()
 	}
 	p.expect(token.DEDENT, "dedent after type body")
@@ -309,6 +325,242 @@ func (p *Parser) parseBlock() []ast.Stmt {
 	return body
 }
 
+// parseUIBlock parses a block inside a ui func body.
+// It dispatches to parseComponentDecl when it sees IDENT[IDENT]: pattern,
+// otherwise falls back to parseStmt for regular statements.
+func (p *Parser) parseUIBlock() []ast.Stmt {
+	p.expect(token.COLON, "':' before block")
+	p.expect(token.NEWLINE, "newline after ':'")
+	p.expect(token.INDENT, "indented block")
+
+	var body []ast.Stmt
+	for !p.check(token.DEDENT) && !p.atEnd() {
+		p.skipNewlines()
+		if p.check(token.DEDENT) || p.atEnd() {
+			break
+		}
+		// Check for component declaration: IDENT LBRACKET IDENT RBRACKET
+		if p.isComponentDeclAhead() {
+			comp := p.parseComponentDecl()
+			if comp != nil {
+				body = append(body, comp)
+			}
+			continue
+		}
+		stmt := p.parseStmt()
+		if stmt != nil {
+			body = append(body, stmt)
+		}
+	}
+	p.expect(token.DEDENT, "dedent after block")
+	return body
+}
+
+// isComponentDeclAhead checks if the current position starts a component declaration.
+// Pattern: IDENT LBRACKET IDENT RBRACKET
+func (p *Parser) isComponentDeclAhead() bool {
+	if !p.check(token.IDENT) {
+		return false
+	}
+	if p.pos+2 >= len(p.tokens) {
+		return false
+	}
+	return p.tokens[p.pos+1].Kind == token.LBRACKET && p.tokens[p.pos+2].Kind == token.IDENT
+}
+
+// parseComponentDecl parses a UI component declaration.
+// Syntax: ComponentType[id]:
+//
+//	prop = value
+//	on_event = handler
+//	ui func name():
+//	    ...
+//	ChildType[child_id]:
+//	    ...
+func (p *Parser) parseComponentDecl() *ast.ComponentDecl {
+	compTok := p.advance() // component type name
+	component := compTok.Lexeme
+
+	p.expect(token.LBRACKET, "'[' after component type")
+	idTok := p.expect(token.IDENT, "component id")
+	p.expect(token.RBRACKET, "']' after component id")
+
+	comp := &ast.ComponentDecl{
+		CompPos:   compTok.Pos,
+		Component: component,
+		ID:        idTok.Lexeme,
+	}
+
+	if !p.check(token.COLON) {
+		p.consumeTerminator()
+		return comp
+	}
+
+	p.expect(token.COLON, "':' after component header")
+	p.expect(token.NEWLINE, "newline after ':'")
+	p.expect(token.INDENT, "indented component body")
+
+	isWindow := component == "Window"
+	if isWindow {
+		p.windowDepth++
+	}
+
+	for !p.check(token.DEDENT) && !p.atEnd() {
+		p.skipNewlines()
+		if p.check(token.DEDENT) || p.atEnd() {
+			break
+		}
+
+		// ui func declaration (only allowed inside Window)
+		if p.check(token.UI) && p.peekNext().Kind == token.FUNC {
+			if !isWindow {
+				uiTok := p.advance() // consume 'ui'
+				p.errorAt(uiTok, "E081", "ui func is only allowed inside a Window block", "move ui func inside a Window[...] block")
+				// Parse and discard the function to recover properly.
+				p.parseFuncDecl(false, false, true)
+				continue
+			}
+			p.advance() // consume 'ui'
+			fn := p.parseFuncDecl(false, false, true)
+			if fn != nil {
+				comp.Funcs = append(comp.Funcs, fn)
+			}
+			continue
+		}
+
+		// bare func declaration (allowed inside Window for event handlers)
+		if p.check(token.FUNC) {
+			if !isWindow {
+				funcTok := p.peek()
+				p.errorAt(funcTok, "E087", "func is only allowed inside a Window block", "move func inside a Window[...] block")
+				p.parseFuncDecl(false, false, false)
+				continue
+			}
+			fn := p.parseFuncDecl(false, false, false)
+			if fn != nil {
+				comp.Funcs = append(comp.Funcs, fn)
+			}
+			continue
+		}
+
+		// Migration diagnostic for the old event binding syntax: on <event> = <handler>
+		if p.isOldEventBindingAhead() {
+			p.reportOldEventBinding()
+			continue
+		}
+
+		// Event binding: on_<event> = <handler>
+		if p.isEventBindingAhead() {
+			ev := p.parseEventBinding()
+			if ev != nil {
+				comp.Events = append(comp.Events, ev)
+			}
+			continue
+		}
+
+		// Child component: IDENT LBRACKET IDENT RBRACKET
+		if p.isComponentDeclAhead() {
+			child := p.parseComponentDecl()
+			if child != nil {
+				comp.Children = append(comp.Children, child)
+			}
+			continue
+		}
+
+		// Property assignment: name = expr
+		if p.isComponentPropAhead() {
+			prop := p.parseComponentProp()
+			if prop != nil {
+				comp.Props = append(comp.Props, prop)
+			}
+			continue
+		}
+
+		p.errorAt(p.peek(), "E088", "expected property, event binding, ui func, or child component", "use 'prop = value', 'on_event = handler', 'ui func', or 'ChildType[id]:'")
+		p.synchronize()
+	}
+
+	if isWindow {
+		p.windowDepth--
+	}
+
+	p.expect(token.DEDENT, "dedent after component body")
+	return comp
+}
+
+func (p *Parser) isComponentPropAhead() bool {
+	return p.isComponentPropName(p.peek()) && p.checkNext(token.EQ)
+}
+
+func (p *Parser) isComponentPropName(tok token.Token) bool {
+	switch tok.Kind {
+	case token.IDENT, token.STEP, token.TYPE:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *Parser) isEventBindingAhead() bool {
+	if !p.check(token.IDENT) || !p.checkNext(token.EQ) {
+		return false
+	}
+	return eventNameFromBinding(p.peek().Lexeme) != ""
+}
+
+func eventNameFromBinding(name string) string {
+	if !strings.HasPrefix(name, "on_") || len(name) <= len("on_") {
+		return ""
+	}
+	return strings.TrimPrefix(name, "on_")
+}
+
+func (p *Parser) isOldEventBindingAhead() bool {
+	return p.check(token.IDENT) && p.peek().Lexeme == "on" && p.checkNext(token.IDENT)
+}
+
+func (p *Parser) reportOldEventBinding() {
+	onTok := p.advance()
+	eventTok := p.expect(token.IDENT, "event name")
+	hint := fmt.Sprintf("use on_%s = handler", eventTok.Lexeme)
+	if p.check(token.EQ) {
+		p.advance()
+		if handler, ok := p.peekAsIdent(); ok {
+			hint = fmt.Sprintf("use on_%s = %s", eventTok.Lexeme, handler.Lexeme)
+		}
+	}
+	p.errorAt(onTok, "E089", "old event binding syntax 'on event = handler' is no longer supported", hint)
+	p.synchronize()
+}
+
+func (p *Parser) peekAsIdent() (token.Token, bool) {
+	if p.check(token.IDENT) {
+		return p.peek(), true
+	}
+	return token.Token{}, false
+}
+
+// parseComponentProp parses a property assignment inside a component block.
+// Syntax: name = value
+func (p *Parser) parseComponentProp() *ast.ComponentProp {
+	nameTok := p.advance()
+	p.expect(token.EQ, "'=' after property name")
+	value := p.parseExpression(precLowest)
+	p.consumeTerminator()
+	return &ast.ComponentProp{PropPos: nameTok.Pos, Name: nameTok.Lexeme, Value: value}
+}
+
+// parseEventBinding parses an event handler binding inside a component block.
+// Syntax: on_event = handler
+func (p *Parser) parseEventBinding() *ast.EventBinding {
+	nameTok := p.expect(token.IDENT, "event binding name")
+	eventName := eventNameFromBinding(nameTok.Lexeme)
+	p.expect(token.EQ, "'=' after event binding name")
+	handler := p.parseExpression(precLowest)
+	p.consumeTerminator()
+	return &ast.EventBinding{BindPos: nameTok.Pos, Name: nameTok.Lexeme, Event: eventName, Handler: handler}
+}
+
 func (p *Parser) parseStmt() ast.Stmt {
 	p.skipNewlines()
 	switch p.peek().Kind {
@@ -351,6 +603,10 @@ func (p *Parser) parseStmt() ast.Stmt {
 	case token.CONST:
 		return p.parseConstDecl()
 	case token.IDENT:
+		if p.peek().Lexeme == "on" && p.checkNext(token.IDENT) {
+			p.reportOldEventBinding()
+			return nil
+		}
 		if p.checkNext(token.COLON) {
 			return p.parseVarDecl()
 		}
@@ -412,7 +668,7 @@ func (p *Parser) parseLoopStmt() *ast.LoopStmt {
 				break
 			}
 			if !p.isIteratorStart() {
-				p.errorAt(p.peek(), "E013", "expected loop iterator or modifier", "use name in iterable, step, while, or if")
+				p.errorAt(p.peek(), "E090", "expected loop iterator or modifier", "use name in iterable, step, while, or if")
 				break
 			}
 			stmt.Iterators = append(stmt.Iterators, p.parseLoopIterator())
@@ -592,7 +848,7 @@ func (p *Parser) parsePrimary() ast.Expr {
 	case token.SWITCH:
 		return p.parseSwitchExpr(tok)
 	default:
-		p.errorAt(tok, "E013", fmt.Sprintf("expected expression, got %s", tok.Kind), "use a literal, identifier, or expression")
+		p.errorAt(tok, "E091", fmt.Sprintf("expected expression, got %s", tok.Kind), "use a literal, identifier, or expression")
 		return &ast.BadExpr{Start: tok.Pos, Stop: tok.Pos}
 	}
 }
@@ -752,7 +1008,7 @@ func (p *Parser) parseInterpolatedString(tok token.Token) ast.Expr {
 				if depth == 0 {
 					frag := strings.TrimSpace(body[start:j])
 					if frag == "" {
-						p.errorAt(tok, "E013", "expected expression inside interpolation", "put an expression between braces")
+						p.errorAt(tok, "E092", "expected expression inside interpolation", "put an expression between braces")
 						expr.Segments = append(expr.Segments, ast.InterpSegment{IsExpr: true, Expr: &ast.BadExpr{Start: tok.Pos, Stop: tok.Pos}})
 					} else {
 						expr.Segments = append(expr.Segments, ast.InterpSegment{IsExpr: true, Expr: p.parseInterpolationExpr(tok, frag)})
@@ -783,7 +1039,7 @@ func (p *Parser) parseInterpolationExpr(tok token.Token, src string) ast.Expr {
 	fragment := New(tokens, diag)
 	expr := fragment.parseExpression(precLowest)
 	if !fragment.check(token.EOF) {
-		p.errorAt(tok, "E013", "expected end of interpolation expression", "keep one expression inside interpolation braces")
+		p.errorAt(tok, "E093", "expected end of interpolation expression", "keep one expression inside interpolation braces")
 	}
 	return expr
 }
@@ -795,7 +1051,7 @@ func (p *Parser) parseType(inTypeContext bool) ast.TypeExpr {
 	case token.STRING_KW, token.INT_KW, token.FLOAT_KW, token.BOOL_KW, token.CHAR_KW, token.ANY, token.IDENT:
 		name = p.advance().Lexeme
 	default:
-		p.errorAt(start, "E013", fmt.Sprintf("expected type, got %s", start.Kind), "use a type name")
+		p.errorAt(start, "E094", fmt.Sprintf("expected type, got %s", start.Kind), "use a type name")
 		p.advance()
 		return &ast.SimpleType{TypePos: start.Pos, Name: "<error>"}
 	}
@@ -947,8 +1203,21 @@ func (p *Parser) skipNewlines() {
 }
 
 func (p *Parser) synchronize() {
+	start := p.pos
+	defer func() {
+		if p.pos == start && !p.atEnd() {
+			p.advance()
+		}
+	}()
 	for !p.atEnd() {
 		if p.previous().Kind == token.NEWLINE {
+			// If we're already at a stop-token, advance past it to avoid
+			// getting stuck in a loop when the caller can't handle it.
+			switch p.peek().Kind {
+			case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT:
+				p.advance()
+				return
+			}
 			return
 		}
 		switch p.peek().Kind {
@@ -956,6 +1225,7 @@ func (p *Parser) synchronize() {
 			p.advance()
 			return
 		case token.DEDENT, token.FUNC, token.TYPE, token.PACKAGE, token.IMPORT, token.CONST, token.PUB, token.ASYNC, token.UI, token.AWAIT:
+			p.advance()
 			return
 		}
 		p.advance()
@@ -967,7 +1237,7 @@ func (p *Parser) expect(kind token.TokenKind, what string) token.Token {
 		return p.advance()
 	}
 	tok := p.peek()
-	p.errorAt(tok, "E013", fmt.Sprintf("expected %s, got %s", what, tok.Kind), "check the syntax near this token")
+	p.errorAt(tok, "E095", fmt.Sprintf("expected %s, got %s", what, tok.Kind), "check the syntax near this token")
 	return tok
 }
 
@@ -1001,6 +1271,13 @@ func (p *Parser) checkNext(kind token.TokenKind) bool {
 		return false
 	}
 	return p.tokens[p.pos+1].Kind == kind
+}
+
+func (p *Parser) peekNext() token.Token {
+	if p.pos+1 >= len(p.tokens) {
+		return token.Token{Kind: token.EOF}
+	}
+	return p.tokens[p.pos+1]
 }
 
 func (p *Parser) advance() token.Token {

@@ -6,6 +6,7 @@ package checker
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/LealLang/leallang/internal/ast"
 	"github.com/LealLang/leallang/internal/diagnostics"
@@ -14,22 +15,26 @@ import (
 
 // Checker performs semantic analysis on an AST.
 type Checker struct {
-	program     *ast.Program
-	diag        *diagnostics.Diagnostics
-	scope       *Scope
-	global      *Scope
-	pkgPath     string
-	inAsyncFunc bool
+	program       *ast.Program
+	diag          *diagnostics.Diagnostics
+	scope         *Scope
+	global        *Scope
+	pkgPath       string
+	inAsyncFunc   bool
+	inUIFunc      bool
+	componentIDs  map[string]token.Position  // scoped per ui func
+	windowMethods map[string]map[string]bool // windowID -> set of ui func names
 }
 
 // Check performs semantic analysis on the given program.
 // Errors are reported to diag.
 func Check(program *ast.Program, diag *diagnostics.Diagnostics) {
 	c := &Checker{
-		program: program,
-		diag:    diag,
-		global:  NewScope(nil),
-		scope:   nil, // set after builtins
+		program:       program,
+		diag:          diag,
+		global:        NewScope(nil),
+		scope:         nil, // set after builtins
+		windowMethods: make(map[string]map[string]bool),
 	}
 	c.scope = c.global
 
@@ -60,6 +65,99 @@ func (c *Checker) collectDecls(program *ast.Program) {
 			c.collectVarDecl(d)
 		case *ast.ConstDecl:
 			c.collectConstDecl(d)
+		case *ast.ComponentDecl:
+			c.collectComponentDecls(d)
+		}
+	}
+}
+
+// collectComponentDecls collects ui func declarations from a component tree.
+func (c *Checker) collectComponentDecls(decl *ast.ComponentDecl) {
+	if decl.Component == "Window" && len(decl.Funcs) > 0 {
+		methods := make(map[string]bool)
+		for _, fn := range decl.Funcs {
+			c.collectFuncDecl(fn)
+			if fn.UI {
+				methods[fn.Name] = true
+			}
+		}
+		c.windowMethods[decl.ID] = methods
+	} else {
+		for _, fn := range decl.Funcs {
+			c.collectFuncDecl(fn)
+		}
+	}
+	for _, child := range decl.Children {
+		c.collectComponentDecls(child)
+	}
+}
+
+// validateComponentProps validates properties against a component type definition.
+func (c *Checker) validateComponentProps(ct *ComponentType, props []*ast.ComponentProp, componentName string) {
+	for _, prop := range props {
+		propInfo, exists := ct.Properties[prop.Name]
+		if !exists {
+			if ct.Primary != nil && ct.Primary.Name == prop.Name {
+				propInfo = ct.Primary
+			} else {
+				c.error(prop.PropPos, 0, "E072",
+					fmt.Sprintf("unknown property '%s' for component %s", prop.Name, componentName),
+					fmt.Sprintf("valid properties: %s", propertyNames(ct.Properties)))
+				continue
+			}
+		}
+		valType := c.checkExpr(prop.Value)
+		if valType != nil && !IsAssignable(valType, propInfo.Type) {
+			c.error(prop.Value.Pos(), 0, "E022",
+				fmt.Sprintf("cannot assign %s to property '%s' of type %s", FormatType(valType), prop.Name, FormatType(propInfo.Type)),
+				"")
+		}
+	}
+}
+
+// validateComponentEvents validates event bindings against a component type definition.
+func (c *Checker) validateComponentEvents(ct *ComponentType, events []*ast.EventBinding, componentName string) {
+	for _, ev := range events {
+		eventType, exists := ct.Events[ev.Event]
+		if !exists {
+			c.error(ev.BindPos, 0, "E073",
+				fmt.Sprintf("unknown event '%s' for component %s", ev.Event, componentName),
+				fmt.Sprintf("valid events: %s", eventNames(ct.Events)))
+			continue
+		}
+		handlerIdent, ok := ev.Handler.(*ast.Ident)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074", "event handler must be a function name", "")
+			continue
+		}
+		handlerSym := c.scope.Lookup(handlerIdent.Name)
+		if handlerSym == nil {
+			c.error(ev.Handler.Pos(), 0, "E021", fmt.Sprintf("undefined name '%s'", handlerIdent.Name), "")
+			continue
+		}
+		handlerSig, ok := handlerSym.Type.(*FuncSignature)
+		if !ok {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("'%s' is not a function", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) > 1 {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' has too many parameters (expected 0 or 1)", handlerIdent.Name), "")
+			continue
+		}
+		if handlerSig.ReturnType != nil {
+			c.error(ev.Handler.Pos(), 0, "E074",
+				fmt.Sprintf("event handler '%s' must not return a value", handlerIdent.Name), "")
+			continue
+		}
+		if len(handlerSig.Params) == 1 {
+			paramType := handlerSig.Params[0].Type
+			if !IsAssignable(eventType, paramType) {
+				c.error(ev.Handler.Pos(), 0, "E074",
+					fmt.Sprintf("event handler '%s' parameter type %s does not match event type %s",
+						handlerIdent.Name, FormatType(paramType), FormatType(eventType)), "")
+			}
 		}
 	}
 }
@@ -76,7 +174,83 @@ func (c *Checker) checkDecls(program *ast.Program) {
 			c.checkConstDecl(d)
 		case *ast.TypeDecl:
 			c.checkTypeDecl(d)
+		case *ast.ComponentDecl:
+			c.checkComponentDeclTopLevel(d)
 		}
+	}
+}
+
+// checkComponentDeclTopLevel checks a top-level component declaration (e.g., Window).
+func (c *Checker) checkComponentDeclTopLevel(decl *ast.ComponentDecl) {
+	// Only Window is allowed at the top level.
+	if decl.Component != "Window" {
+		c.error(decl.CompPos, 0, "E076", "component declaration outside ui function", "only Window[...] is allowed at the top level; other components must be inside ui func bodies")
+		return
+	}
+
+	// Initialize component ID tracking for the Window's tree.
+	prevIDs := c.componentIDs
+	c.componentIDs = make(map[string]token.Position)
+	defer func() { c.componentIDs = prevIDs }()
+
+	// Register the Window's own ID.
+	c.componentIDs[decl.ID] = decl.CompPos
+
+	// Look up the component type.
+	sym := c.global.Lookup(decl.Component)
+	if sym == nil {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", decl.Component), "")
+		return
+	}
+	ct, ok := sym.Type.(*ComponentType)
+	if !ok {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("'%s' is not a component type", decl.Component), "")
+		return
+	}
+
+	// Validate properties and events.
+	c.validateComponentProps(ct, decl.Props, decl.Component)
+	c.validateComponentEvents(ct, decl.Events, decl.Component)
+
+	// Check ui func declarations inside the Window.
+	for _, fn := range decl.Funcs {
+		c.checkFuncDecl(fn)
+	}
+
+	// Recurse into children (they are inside the Window's component tree, which is a UI context).
+	for _, child := range decl.Children {
+		c.checkComponentDeclInWindow(child)
+	}
+}
+
+// checkComponentDeclInWindow checks a component declaration inside a Window's tree.
+// These components don't need to be inside a ui func — they are part of the Window's declarative tree.
+func (c *Checker) checkComponentDeclInWindow(decl *ast.ComponentDecl) {
+	// Check for duplicate component ID.
+	if existing, exists := c.componentIDs[decl.ID]; exists {
+		c.error(decl.CompPos, 0, "E070",
+			fmt.Sprintf("duplicate component id '%s' in this window (first used at line %d)", decl.ID, existing.Line),
+			"component ids must be unique within a window")
+		return
+	}
+	c.componentIDs[decl.ID] = decl.CompPos
+
+	sym := c.global.Lookup(decl.Component)
+	if sym == nil {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", decl.Component), "")
+		return
+	}
+	ct, ok := sym.Type.(*ComponentType)
+	if !ok {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("'%s' is not a component type", decl.Component), "")
+		return
+	}
+
+	c.validateComponentProps(ct, decl.Props, decl.Component)
+	c.validateComponentEvents(ct, decl.Events, decl.Component)
+
+	for _, child := range decl.Children {
+		c.checkComponentDeclInWindow(child)
 	}
 }
 
@@ -236,12 +410,22 @@ func (c *Checker) checkFuncDecl(d *ast.FuncDecl) {
 	prevAsync := c.inAsyncFunc
 	c.inAsyncFunc = d.Async
 
+	// Set UI context for body checking.
+	prevUI := c.inUIFunc
+	prevIDs := c.componentIDs
+	if d.UI {
+		c.inUIFunc = true
+		c.componentIDs = make(map[string]token.Position)
+	}
+
 	// Check body.
 	for _, stmt := range d.Body {
 		c.checkStmt(stmt, sig.ReturnType)
 	}
 
 	c.inAsyncFunc = prevAsync
+	c.inUIFunc = prevUI
+	c.componentIDs = prevIDs
 	c.scope = prevScope
 }
 
@@ -673,6 +857,27 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 	case *ast.FieldExpr:
 		// Namespace call, record method call, or component property access
 		c.checkAsyncSafety(fn)
+
+		// Handle cross-window calls: @Window[id].ui_func(args)
+		// This is allowed even outside ui func bodies.
+		if compRef, ok := fn.X.(*ast.ComponentRefExpr); ok {
+			if compRef.Component == "Window" {
+				if methods, exists := c.windowMethods[compRef.ID]; exists && methods[fn.Field] {
+					sym := c.global.Lookup(fn.Field)
+					if sym != nil {
+						if s, ok := sym.Type.(*FuncSignature); ok {
+							sig = s
+						}
+					}
+					if sig == nil {
+						c.error(fn.Dot, 0, "E039", fmt.Sprintf("window '%s' has no ui func '%s'", compRef.ID, fn.Field), "")
+						return nil
+					}
+					break
+				}
+			}
+		}
+
 		baseType := c.checkExpr(fn.X)
 		switch t := baseType.(type) {
 		case *NamespaceType:
@@ -689,9 +894,18 @@ func (c *Checker) checkCallExpr(call *ast.CallExpr) Type {
 				c.error(fn.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", t.Name, fn.Field), "")
 				return nil
 			}
+		case *GenericType:
+			if method := collectionMethodSignature(t, fn.Field, c.global); method != nil {
+				sig = method
+			} else {
+				c.error(fn.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", FormatType(t), fn.Field), "")
+				return nil
+			}
 		case *ComponentType:
 			if prop, ok := t.Properties[fn.Field]; ok {
 				calleeType = prop.Type
+			} else if t.Primary != nil && t.Primary.Name == fn.Field {
+				calleeType = t.Primary.Type
 			} else {
 				calleeType = baseType
 			}
@@ -837,6 +1051,32 @@ func (c *Checker) checkCallArgs(sig *FuncSignature, call *ast.CallExpr) {
 
 // checkFieldExpr checks obj.field.
 func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
+	// Handle cross-window field access: @Window[id].field
+	// This is allowed even outside ui func bodies.
+	if compRef, ok := f.X.(*ast.ComponentRefExpr); ok {
+		if compRef.Component == "Window" {
+			if sym := c.global.Lookup(compRef.Component); sym != nil {
+				if ct, ok := sym.Type.(*ComponentType); ok {
+					if prop, ok := ct.Properties[f.Field]; ok {
+						return prop.Type
+					}
+					if ct.Primary != nil && ct.Primary.Name == f.Field {
+						return ct.Primary.Type
+					}
+					// Check if it's a ui func method.
+					if methods, exists := c.windowMethods[compRef.ID]; exists && methods[f.Field] {
+						methodSym := c.global.Lookup(f.Field)
+						if methodSym != nil {
+							return methodSym.Type
+						}
+					}
+					c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", compRef.Component, f.Field), "")
+					return nil
+				}
+			}
+		}
+	}
+
 	base := c.checkExpr(f.X)
 	if base == nil {
 		return nil
@@ -855,6 +1095,12 @@ func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
 		}
 		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
 		return nil
+	case *GenericType:
+		if method := collectionMethodSignature(t, f.Field, c.global); method != nil {
+			return method
+		}
+		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no method '%s'", FormatType(t), f.Field), "")
+		return nil
 	case *NamespaceType:
 		if member, ok := t.Members[f.Field]; ok {
 			return member
@@ -867,6 +1113,9 @@ func (c *Checker) checkFieldExpr(f *ast.FieldExpr) Type {
 	case *ComponentType:
 		if prop, ok := t.Properties[f.Field]; ok {
 			return prop.Type
+		}
+		if t.Primary != nil && t.Primary.Name == f.Field {
+			return t.Primary.Type
 		}
 		c.error(f.Dot, 0, "E039", fmt.Sprintf("type %s has no field '%s'", t.Name, f.Field), "")
 		return nil
@@ -1003,6 +1252,12 @@ func (c *Checker) checkSwitchExpr(s *ast.SwitchExpr) Type {
 
 // checkComponentRef checks a @Component[id] reference.
 func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
+	// Component refs are only allowed inside ui func bodies.
+	// Exception: @Window[id] is allowed as a value (e.g., window.open(@Window[id])).
+	if !c.inUIFunc && cr.Component != "Window" {
+		c.error(cr.AtPos, 0, "E075", "component reference outside ui func", "@Component[id] syntax is only allowed inside ui func bodies; use @Window[id].func() for cross-window calls")
+		return nil
+	}
 	// Component refs are validated when we have a component registry.
 	// For now, look up the component type by name.
 	if sym := c.global.Lookup(cr.Component); sym != nil {
@@ -1012,6 +1267,62 @@ func (c *Checker) checkComponentRef(cr *ast.ComponentRefExpr) Type {
 	}
 	c.error(cr.AtPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", cr.Component), "")
 	return nil
+}
+
+// checkComponentDecl checks a UI component declaration.
+func (c *Checker) checkComponentDecl(decl *ast.ComponentDecl) {
+	if !c.inUIFunc {
+		c.error(decl.CompPos, 0, "E076", "component declaration outside ui function", "component declarations are only allowed inside ui func bodies")
+		return
+	}
+
+	// Look up the component type.
+	sym := c.global.Lookup(decl.Component)
+	if sym == nil {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("unknown component type '%s'", decl.Component), "")
+		return
+	}
+	ct, ok := sym.Type.(*ComponentType)
+	if !ok {
+		c.error(decl.CompPos, 0, "E043", fmt.Sprintf("'%s' is not a component type", decl.Component), "")
+		return
+	}
+
+	// Check for duplicate component ID.
+	if firstPos, exists := c.componentIDs[decl.ID]; exists {
+		c.error(decl.CompPos, 0, "E070",
+			fmt.Sprintf("duplicate component id '%s' in this scope", decl.ID),
+			fmt.Sprintf("first defined at line %d", firstPos.Line))
+		return
+	}
+	c.componentIDs[decl.ID] = decl.CompPos
+
+	// Validate properties and events.
+	c.validateComponentProps(ct, decl.Props, decl.Component)
+	c.validateComponentEvents(ct, decl.Events, decl.Component)
+
+	// Recurse into children.
+	for _, child := range decl.Children {
+		c.checkComponentDecl(child)
+	}
+}
+
+// propertyNames returns a comma-separated list of property names for diagnostics.
+func propertyNames(props map[string]*ParamInfo) string {
+	names := make([]string, 0, len(props))
+	for name := range props {
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// eventNames returns a comma-separated list of event names for diagnostics.
+func eventNames(events map[string]Type) string {
+	names := make([]string, 0, len(events))
+	for name := range events {
+		names = append(names, name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // checkStmt checks a statement.
@@ -1036,6 +1347,8 @@ func (c *Checker) checkStmt(stmt ast.Stmt, returnType Type) {
 		c.checkVarDecl(s)
 	case *ast.ConstDecl:
 		c.checkConstDecl(s)
+	case *ast.ComponentDecl:
+		c.checkComponentDecl(s)
 	case *ast.PassStmt, *ast.BreakStmt, *ast.ContinueStmt:
 		// Valid, no checking needed.
 	}

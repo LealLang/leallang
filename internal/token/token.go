@@ -62,6 +62,7 @@ const (
 	ASYNC
 	AWAIT
 	UI
+	ON
 
 	// Operators
 	PLUS
@@ -148,6 +149,7 @@ var kindNames = [...]string{
 	ASYNC:     "ASYNC",
 	AWAIT:     "AWAIT",
 	UI:        "UI",
+	ON:        "ON",
 
 	PLUS:         "PLUS",
 	MINUS:        "MINUS",

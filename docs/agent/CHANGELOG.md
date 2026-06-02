@@ -4,10 +4,99 @@ All notable changes to the LealLang design specification will be documented in t
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0] - 01-06-2026
+## [0.0.1] - 02-06-2026
 
 ### Changed
 
+- Replaced UI event bindings with the new `on_<event> = handler` syntax:
+  - `internal/token/token.go`: `on` is no longer lexed as a keyword, allowing it to be used as a normal property name such as `Toggle.on`
+  - `internal/parser/parser.go`: `on_<event>` now parses as an event binding; old `on event = handler` emits a migration diagnostic with the new spelling
+  - `internal/ast/ast.go`: Event binding positions now use neutral binding names rather than `OnPos`
+  - Updated UI IR tests, examples, and LealLang docs to use `on_click`, `on_hover`, `on_change`, and related event names
+- Split the UI component surface into a registry:
+  - `internal/checker/ui_registry.go`: Centralizes component names, primary properties, properties, events, and shared UI types
+  - `internal/checker/builtins.go`: Delegates component registration to the UI registry
+  - Canonicalized component names and properties including `Checkbox.label`, `Toggle.on`, `Grid.cols`, `Line.thickness`, `Menu.label`, `Table.data`, and `Window.on_resize`
+- Updated docs to match implemented built-ins:
+  - `json.parse` and `json.stringify` are documented as non-generic tuple-returning functions
+  - Removed `any.as<T>()` examples until generic method calls are implemented
+  - Color properties now document typed `Color` constants instead of hex string color literals
+
+### Added
+
+- Collection methods for lists and dictionaries:
+  - `internal/checker/collection_methods.go`: Adds typed signatures for `List<T>.push/pop/insert/remove/index_of/has_index/count/clear`
+  - `internal/checker/collection_methods.go`: Adds typed signatures for `Dict<string, V>.has_key/try_add/try_set/try_remove/count/clear/get`
+  - `internal/interpreter/collection_methods.go`: Adds native runtime implementations for list and dictionary methods
+- Parser support for empty UI component declarations such as `MenuSeparator[sep]`.
+
+### Fixed
+
+- Event handler validation now rejects handlers that return a value.
+- Parser recovery now guarantees progress when synchronizing after component block errors, preventing no-progress loops on invalid component-body tokens.
+
+## [0.0.1] - 01-06-2026
+
+### Fixed
+
+- Deduplicated error code `E013` which was used as a catch-all for 17+ distinct errors across parser and checker:
+  - `internal/parser/parser.go`: Assigned unique codes E080–E095 for parser-specific errors (async/ui mutual exclusion, ui func outside Window, expected tokens, component block validation, interpolation, etc.)
+  - `internal/checker/checker.go`: Assigned E075 (component reference outside ui func) and E076 (component declaration outside ui function)
+  - `internal/parser/parser_test.go`: Updated 5 test expectations to use new codes
+  - `internal/checker/checker_test.go`: Updated 2 test expectations to use new codes
+- Parser infinite loop when bare `func` appears inside component blocks:
+  - `internal/parser/parser.go`: `synchronize()` now advances past stop-tokens when `previous` is NEWLINE, preventing the error-recovery loop from getting stuck at the same token position
+  - `internal/parser/parser.go`: `parseComponentDecl()` now handles bare `func` declarations inside Window blocks (alongside `ui func`), storing them in `comp.Funcs` with `UI: false`
+  - `internal/interpreter/interpreter.go`: `registerComponentFuncs()` uses `fn.UI` instead of hardcoded `true` so bare funcs are registered as non-UI
+- Checker: `@ComponentRef` syntax is now only allowed inside `ui func` bodies:
+  - `internal/checker/checker.go`: `checkComponentRef()` rejects `@Component[id]` when `inUIFunc` is false (except `@Window[id]` which is allowed as a value)
+  - `internal/checker/checker.go`: `checkFieldExpr()` and `checkCallExpr()` handle cross-window calls (`@Window[id].func()`) specially, allowing them even outside `ui func` bodies
+  - `examples/test.ll`: Updated to use `ui func handle_resize()` with `@Window[main].w`/`.h`, added `func handle_hover()` as bare func example, added `window.open(@Window[main])` call in `main()`
+- Checker: `window.open()` and `window.close()` no longer require `ref` parameter:
+  - `internal/checker/builtins.go`: Changed parameter from `{Name: "ref", Type: AnyType, Ref: true}` to `{Name: "window_ref", Type: AnyType}` to match spec syntax `window.open(@Window[id])`
+
+### Implemented
+
+- First-class UI support as a complete language feature:
+  - `internal/ast/ast.go`: `ComponentDecl`, `ComponentProp`, `EventBinding` AST nodes with source positions and interface markers
+  - `internal/token/token.go`: `ON` keyword token for event binding syntax
+  - `internal/parser/parser.go`: `parseUIBlock()` and `parseComponentDecl()` methods for parsing `ComponentType[id]:` blocks with props, events, and nested children inside `ui func` bodies
+  - `internal/checker/checker.go`: `checkComponentDecl()` with full validation — component type lookup (35 types), duplicate ID detection (E070), property validation (E072), type checking (E022), event validation (E073), handler signature validation (E074)
+  - `internal/uiir/uiir.go`: Stable UI intermediate representation (`Op`, `OpKind`, `Log`) independent of AST/checker/desktop framework
+  - `internal/uiir/fakebackend.go`: Test backend that records mount, prop-set, and event-bind operations for headless testing
+  - `internal/interpreter/interpreter.go`: `evalComponentDecl()` evaluates component trees, records UI operations to backend log, supports `@Component[id].prop = value` assignments via `OpPropSet`
+  - `internal/interpreter/value.go`: `valueToUI()` helper for LealLang-to-Go value conversion
+  - 20 new tests: 7 parser, 8 checker, 5 interpreter integration
+
+### Changed
+
+- `internal/interpreter/ui_test.go`: Updated all 4 UI integration tests to use new top-level `Window[...]` pattern instead of `ui func view():` wrapper. UI operations (mount, prop-set, event-bind) now happen during program initialization rather than when `main()` runs. `main()` uses `pass` or calls handlers directly.
+- Enforced `ui func` must be inside `Window[...]` blocks:
+  - `internal/ast/ast.go`: Added `Funcs []*FuncDecl` field to `ComponentDecl` for storing `ui func` declarations inside Window blocks
+  - `internal/parser/parser.go`: Added `windowDepth` tracking, `ui func` parsing inside component blocks, rejection of `ui func` outside Window blocks and at top level, top-level `ComponentDecl` parsing support, `peekNext()` helper
+  - `internal/checker/checker.go`: Added `collectComponentDecls()` for collecting `ui func` from component trees, `checkComponentDeclTopLevel()` for top-level Window validation, `checkComponentDeclInWindow()` for components inside Window's tree with duplicate ID checking
+  - `internal/interpreter/interpreter.go`: Added `registerComponentFuncs()` for registering `ui func` from component trees, top-level `ComponentDecl` evaluation in program initialization
+  - `internal/ast/print.go`: Updated `ComponentDecl` pretty-print to include nested `Funcs`
+  - `internal/parser/parser_test.go`: Updated all component tests to use `Window[...]` at top level, added `TestUIFuncInsideWindowBlock`, `TestUIFuncOutsideWindowBlock`, `TestUIFuncInsideNonWindowComponent`
+  - `internal/checker/checker_test.go`: Updated all component tests to use `Window[...]` at top level
+- Updated spec docs to match block syntax:
+  - `docs/leallang/components/index.md`: Component declarations use `ComponentType[id]:` with `prop = value` and `on event = handler`
+  - `docs/leallang/components/widgets.md`: All widget examples use block syntax
+  - `docs/leallang/components/containers.md`: All container examples use block syntax
+  - `docs/leallang/components/complex.md`: All complex component examples use block syntax
+  - `docs/leallang/components/events.md`: Event binding uses `on event = handler` syntax
+  - `docs/leallang/core/lexical.md`: Updated component syntax examples
+  - `docs/leallang/core/expressions.md`: Updated component declaration examples, removed `@Window[id].ComponentType[id]` form
+  - `docs/leallang/core/packages.md`: Updated Window/component visibility examples
+  - `docs/leallang/core/types.md`: Updated Label example to block syntax
+  - `docs/leallang/builtins/constants.md`: Updated Panel examples to block syntax
+  - `docs/leallang/plugins/index.md`: Updated ColorPicker example to block syntax
+  - `docs/leallang/examples/full-example.md`: Complete rewrite with `Window[...]` at top level and `ui func` inside
+  - `docs/leallang/examples/application-structure.md`: Updated Window/Button examples to block syntax
+  - `docs/leallang/functions/index.md`: Updated `ui func` example with Window block pattern
+- `examples/test.ll`: Restructured to use `Window[main]:` at top level with `ui func handle_save()` inside
+- `internal/checker/checker.go`: Added `windowMethods` map for tracking `ui func` methods per Window instance, `@Window[id].func()` cross-window call resolution via `ComponentRefExpr` field lookup
+- `internal/interpreter/interpreter.go`: Added `ui func` method lookup in `evalFieldExpr` for `ComponentRefVal` — resolves `@Window[id].func()` calls by looking up registered functions in the environment
 - Split `internal/interpreter/interpreter_test.go` (3,220 lines) into 8 focused test files:
   - `test_helpers_test.go` (102 lines) — shared test infrastructure (runSource, safeWriter, etc.)
   - `async_test.go` (506 lines) — 26 tests for async/await, TaskVal, and cloneForTask
@@ -18,7 +107,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `records_and_functions_test.go` (700 lines) — 45 tests for records, functions, strings
   - `declarations_test.go` (170 lines) — 12 tests for const declarations and stub namespaces
 
-## [0] - 31-05-2026
+## [0.0.1] - 31-05-2026
 
 ### Added
 
@@ -77,7 +166,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 8 interpreter tests for async: returns before completion, concurrent tasks, runtime error propagation, list/dict/record deep-copy, non-sendable rejection, callDepth isolation.
 - 5 checker tests for async: E063 ref param rejection, E062 UI-affine namespace rejection, E064 await non-task rejection, async call returns Task, await returns payload+error.
 
-## [0] - 31-05-2026
+## [0.0.1] - 31-05-2026
 
 ### Added
 
@@ -106,11 +195,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `internal/checker/checker.go`: `asyncPayloadType` now checks `RecordType.Name == "Error"` instead of matching any `RecordType` when stripping trailing `Error?` from async return tuples
 
-## [0] - 30-05-2026
+## [0.0.1] - 30-05-2026
 
 - Added `docs/superpowers/specs/2026-05-31-threading-concurrency-design.md` documenting the proposed first threading/concurrency model: per-window UI actors, window-owned `ui func`s, `async func` tasks, `await`, sendable task boundaries, and cancel-on-close lifecycle semantics.
 
-## [0] - 28-05-2026
+## [0.0.1] - 28-05-2026
 
 ### Fixed
 
@@ -168,7 +257,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Diagnostics: error highlighting now spans the full token (e.g., `~~~~` for `true`) instead of a single character
 - Parser: `errorAt` now computes highlight span from token lexeme length
 
-## [0] - 27-05-2006
+## [0.0.1] - 27-05-2006
 
 ### Added
 

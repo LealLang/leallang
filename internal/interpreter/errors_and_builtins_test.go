@@ -349,6 +349,53 @@ func main():
 	}
 }
 
+func TestListMethodsRuntime(t *testing.T) {
+	out := runSource(t, `package app.main
+
+func main():
+    xs: List<int> = [1, 2]
+    xs.push(3)
+    xs.insert(1, 9)
+    console.print_ln(xs.count())
+    console.print_ln(xs.index_of(9))
+    console.print_ln(xs.has_index(4))
+    console.print_ln(xs.remove(2))
+    console.print_ln(xs.pop())
+    xs.clear()
+    console.print_ln(xs.count())
+`)
+	for _, want := range []string{"4", "1", "false", "true", "3", "0"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got %q", want, out)
+		}
+	}
+}
+
+func TestDictMethodsRuntime(t *testing.T) {
+	out := runSource(t, `package app.main
+
+func main():
+    scores: Dict<string, int> = {"Ana": 10}
+    console.print_ln(scores.has_key("Ana"))
+    console.print_ln(scores.try_add("Bob", 11))
+    console.print_ln(scores.try_add("Bob", 12))
+    console.print_ln(scores.try_set("Ana", 15))
+    console.print_ln(scores.try_remove("Bob"))
+    console.print_ln(scores.count())
+    result = scores.get("Ana")
+    console.print_ln(result)
+    missing = scores.get("Bob")
+    console.print_ln(missing)
+    scores.clear()
+    console.print_ln(scores.count())
+`)
+	for _, want := range []string{"true", "false", "1", "15", "null", "KeyError", "0"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got %q", want, out)
+		}
+	}
+}
+
 func TestFieldAssignmentOnNonRecordError(t *testing.T) {
 	requireRuntimeCode(t, `package app.main
 
@@ -390,8 +437,8 @@ func TestFileWriteTextSuccess(t *testing.T) {
 	out := runSource(t, `package app.main
 
 func main():
-    file.write_text("` + path + `", "content")
-    result = file.read_text("` + path + `")
+    file.write_text("`+path+`", "content")
+    result = file.read_text("`+path+`")
     console.print_ln(result)
 `)
 	if !strings.Contains(out, "content") {
@@ -455,4 +502,3 @@ func main():
 		t.Fatalf("expected error for const reassignment")
 	}
 }
-

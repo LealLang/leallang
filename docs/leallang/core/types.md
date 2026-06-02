@@ -69,19 +69,11 @@ value: any = "hello"
 value = 42
 ```
 
-Type-specific operations on `any` require explicit narrowing or checked extraction.
+Type-specific operations on `any` require explicit narrowing.
 
 ```python
 if value is string:
     console.print_ln(value)
-```
-
-Checked extraction uses `.as<T>()` and returns the extracted value with a success flag.
-
-```python
-number, ok = value.as<int>()
-if ok:
-    console.print_ln(number)
 ```
 
 Assigning from `any` to a concrete type requires an explicit check or conversion.
@@ -452,15 +444,13 @@ If the key is missing, direct access fails at runtime.
 Safe dictionary access uses `.get`.
 
 ```python
-score, err = scores.get("Ana")
-if err != null:
-    console.print_ln("Missing score")
+result = scores.get("Ana")
 ```
 
-Use `_` to discard an unneeded returned value.
+`get` returns a tuple value containing the value and an `Error?`. If the key is not present, the value is `null` and the error code is `KeyError`.
 
 ```python
-value, _ = cache.get("theme")
+result = cache.get("theme")
 ```
 
 ---
@@ -518,5 +508,6 @@ console.print_ln($"Total: {price * quantity}")
 Interpolation works in component declarations.
 
 ```python
-Label[welcome_label]($"Welcome, {user_name}")
+Label[welcome_label]:
+    text = $"Welcome, {user_name}"
 ```

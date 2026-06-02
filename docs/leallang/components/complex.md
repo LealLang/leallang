@@ -4,10 +4,6 @@ Complex components compose widgets and containers into higher-level UI structure
 
 ## Tabs
 
-Primary argument:
-
-- none
-
 Properties:
 
 - `dock: Dock?`
@@ -23,18 +19,24 @@ Children:
 Example:
 
 ```python
-Tabs[main_tabs](change: tab_changed):
-    Panel[home_tab](label: "Home", dock: dock.fill):
-        Label[home_label]("Welcome")
-    Panel[settings_tab](label: "Settings", dock: dock.fill):
-        Label[settings_label]("Settings here")
+Tabs[main_tabs]:
+    on_change = tab_changed
+
+    Panel[home_tab]:
+        label = "Home"
+        dock = dock.fill
+
+        Label[home_label]:
+            text = "Welcome"
+    Panel[settings_tab]:
+        label = "Settings"
+        dock = dock.fill
+
+        Label[settings_label]:
+            text = "Settings here"
 ```
 
 ## MenuBar
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -52,20 +54,28 @@ Example:
 
 ```python
 MenuBar[main_menu]:
-    Menu[file_menu](label: "File"):
-        MenuItem[open_item]("Open", click: open_clicked)
-        MenuItem[save_item]("Save", click: save_clicked)
-        MenuSeparator[file_separator]()
-        MenuItem[exit_item]("Exit", click: exit_clicked)
-    Menu[help_menu](label: "Help"):
-        MenuItem[about_item]("About", click: about_clicked)
+    Menu[file_menu]:
+        label = "File"
+
+        MenuItem[open_item]:
+            text = "Open"
+            on_click = open_clicked
+        MenuItem[save_item]:
+            text = "Save"
+            on_click = save_clicked
+        MenuSeparator[file_separator]
+        MenuItem[exit_item]:
+            text = "Exit"
+            on_click = exit_clicked
+    Menu[help_menu]:
+        label = "Help"
+
+        MenuItem[about_item]:
+            text = "About"
+            on_click = about_clicked
 ```
 
 ## Menu
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -83,18 +93,19 @@ Children:
 Example:
 
 ```python
-Menu[file_menu](label: "File"):
-    MenuItem[open_item]("Open", click: open_clicked)
+Menu[file_menu]:
+    label = "File"
+
+    MenuItem[open_item]:
+        text = "Open"
+        on_click = open_clicked
 ```
 
 ## MenuItem
 
-Primary argument:
-
-- `text: string`
-
 Properties:
 
+- `text: string`
 - `enabled: bool = true`
 - `shortcut: string?`
 
@@ -109,14 +120,12 @@ Children:
 Example:
 
 ```python
-MenuItem[save_item]("Save", click: save_clicked)
+MenuItem[save_item]:
+    text = "Save"
+    on_click = save_clicked
 ```
 
 ## MenuSeparator
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -133,14 +142,10 @@ Children:
 Example:
 
 ```python
-MenuSeparator[file_separator]()
+MenuSeparator[file_separator]
 ```
 
 ## ContextMenu
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -158,18 +163,19 @@ Children:
 Example:
 
 ```python
-Button[target_button]("Right-click me", context_menu: @ContextMenu[action_menu])
+Button[target_button]:
+    text = "Right-click me"
 
 ContextMenu[action_menu]:
-    MenuItem[copy_item]("Copy", click: copy_clicked)
-    MenuItem[paste_item]("Paste", click: paste_clicked)
+    MenuItem[copy_item]:
+        text = "Copy"
+        on_click = copy_clicked
+    MenuItem[paste_item]:
+        text = "Paste"
+        on_click = paste_clicked
 ```
 
 ## Toolbar
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -188,18 +194,25 @@ Children:
 Example:
 
 ```python
-Toolbar[main_toolbar](dock: dock.top):
-    Button[new_button]("New", click: new_clicked)
-    Button[open_button]("Open", click: open_clicked)
-    Line[toolbar_divider](orientation: orientation.vertical, thickness: 1, color: colors.black)
-    Button[save_button]("Save", click: save_clicked)
+Toolbar[main_toolbar]:
+    dock = dock.top
+
+    Button[new_button]:
+        text = "New"
+        on_click = new_clicked
+    Button[open_button]:
+        text = "Open"
+        on_click = open_clicked
+    Line[toolbar_divider]:
+        orientation = orientation.vertical
+        thickness = 1
+        color = colors.black
+    Button[save_button]:
+        text = "Save"
+        on_click = save_clicked
 ```
 
 ## Modal
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -218,11 +231,20 @@ Children:
 Example:
 
 ```python
-Modal[confirm_modal](title: "Confirm Action"):
-    Label[confirm_label]("Are you sure?")
-    Row[confirm_actions](dock: dock.bottom):
-        Button[yes_button]("Yes", click: confirm_clicked)
-        Button[no_button]("No", click: cancel_clicked)
+Modal[confirm_modal]:
+    title = "Confirm Action"
+
+    Label[confirm_label]:
+        text = "Are you sure?"
+    Row[confirm_actions]:
+        dock = dock.bottom
+
+        Button[yes_button]:
+            text = "Yes"
+            on_click = confirm_clicked
+        Button[no_button]:
+            text = "No"
+            on_click = cancel_clicked
 ```
 
 Open and close:
@@ -233,10 +255,6 @@ modal.close(@Modal[confirm_modal])
 ```
 
 ## Table
-
-Primary argument:
-
-- none
 
 Properties:
 
@@ -260,7 +278,9 @@ rows: List<Dict<string, string>> = [
     {"name": "Bob", "age": "25"}
 ]
 
-Table[users_table](data: rows, click: row_clicked)
+Table[users_table]:
+    data = rows
+    on_click = row_clicked
 ```
 
 ## Shared Properties
@@ -275,6 +295,11 @@ Many visible components support common properties such as:
 Example:
 
 ```python
-Button[help_button]("Help", tooltip: "Open help")
-Panel[side_panel](dock: dock.left, w: 240)
+Button[help_button]:
+    text = "Help"
+    tooltip = "Open help"
+
+Panel[side_panel]:
+    dock = dock.left
+    w = 240
 ```
