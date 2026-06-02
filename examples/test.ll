@@ -30,3 +30,7 @@ func main():
     window.open(@Window[main])
     @Window[main].handle_save()
     @Window[main].handle_resize()
+
+    my_list: List<int> = [1, 2, 3, 4, 5]
+    loop num in 0..<my_list.count():
+        console.print_ln($"Number: {my_list[num]}")
